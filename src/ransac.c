@@ -153,7 +153,7 @@ static void fill_random_shuffle(int *idx, int n, int a, int b)
 static void fill_random_indices(int *idx, int n, int a, int b)
 {
 	if (b-a==n) {for(int i=0;i<n;i++)idx[i]=a+i;return;}
-	if (5*n > (b-a)) {fill_random_shuffle(idx, n, a, b);return;}
+	//if (5*n > (b-a)) {fill_random_shuffle(idx, n, a, b);return;}
 	// TODO fisher yates shuffle and traverse it by blocks of length nfit
 	int safecount = 0;
 	do {
@@ -162,7 +162,7 @@ static void fill_random_indices(int *idx, int n, int a, int b)
 		safecount += 1;
 	} while (safecount < 100 && !are_different(idx, n));
 	if (safecount == 100)
-		fail("could not generate any model");
+		fail("could not generate any model (%d %d)", n, b-a);
 	//fprintf(stderr, "fri");
 	//for (int i = 0; i < n; i++)
 	//	fprintf(stderr, "\t%d", idx[i]);
@@ -209,14 +209,14 @@ int ransac(
 		void *usr
 		)
 {
-	//fprintf(stderr, "running RANSAC over %d datapoints of dimension %d\n",
-	//		n, datadim);
-	//fprintf(stderr, "will try to find a model of size %d from %d points\n",
-	//	       	modeldim, nfit);
-	//fprintf(stderr, "we will make %d trials and keep the best with e<%g\n",
-	//		ntrials, max_error);
-	//fprintf(stderr, "a model must have more than %d inliers\n",
-	//		min_inliers);
+	fprintf(stderr, "running RANSAC over %d datapoints of dimension %d\n",
+			n, datadim);
+	fprintf(stderr, "will try to find a model of size %d from %d points\n",
+		       	modeldim, nfit);
+	fprintf(stderr, "we will make %d trials and keep the best with e<%g\n",
+			ntrials, max_error);
+	fprintf(stderr, "a model must have more than %d inliers\n",
+			min_inliers);
 
 	int best_ninliers = 0;
 	float best_model[modeldim];

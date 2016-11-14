@@ -46,10 +46,12 @@ int find_straight_line_by_ransac(bool *out_mask, float line[3],
 		float *points, int npoints,
 		int ntrials, float max_err)
 {
+	if (npoints < 2)
+		return false;
 	return ransac(out_mask, line, points, 2, npoints, 3,
 			distance_of_point_to_straight_line,
 			straight_line_through_two_points,
-			4, ntrials, 3, max_err, NULL, NULL);
+			2, ntrials, 3, max_err, NULL, NULL);
 }
 
 struct drawing_state {
@@ -140,7 +142,7 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 	}
 
 	// compute ransac
-	if (hp->size > 8)
+	if (hp->size > 1)
 	{
 		// data for ransac
 		int n = hp->size;
@@ -158,8 +160,6 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 		// plot the line, if found
 		if (n_inliers > global_ransac_minliers)
 		{
-			//printf("RANSAC(%d): %g %g %g\n", n_inliers,
-			//		line[0], line[1], line[2]);
 			double dline[3] = {line[0], line[1], line[2]};
 			double rectangle[4] = {0, 0, w, h};
 			double segment[4];
@@ -170,7 +170,35 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			int ito[2] = {round(segment[2]), round(segment[3])};
 			float fred[3] = {0, 0, 255};
 			draw_segment_frgb(out, w, h, ifrom, ito, fred);
+
+			// try to find a second line
+			int cx = 0;
+			for (int i = 0; i < n; i++)
+				if (!mask[i]) // keep only the unused points
+				{
+					data[2*cx+0] = data[2*i+0];
+					data[2*cx+1] = data[2*i+1];
+					cx++;
+				}
+			assert(cx + n_inliers == n);
+			n = cx;
+
+			n_inliers = find_straight_line_by_ransac(mask, line,
+				data, n,
+				global_ransac_ntrials, global_ransac_maxerr);
+
+			if (n_inliers > global_ransac_minliers)
+			{
+				double dline[3] = {line[0], line[1], line[2]};
+				r = cut_line_with_rectangle(segment,segment+2,
+						dline, rectangle, rectangle+2);
+				int ifrom[2] = {round(segment[0]), round(segment[1])};
+				int ito[2] = {round(segment[2]), round(segment[3])};
+				float fblue[3] = {255, 0, 0};
+				draw_segment_frgb(out, w, h, ifrom, ito, fblue);
+			}
 		}
+
 
 		// cleanup
 		free(mask);
