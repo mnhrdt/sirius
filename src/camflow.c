@@ -1,12 +1,4 @@
-/**
- * Display video from webcam
- *
- * Author  Nash
- * License GPL
- * Website http://nashruddin.com
- */
-
-#include <ctype.h>
+//#include <ctype.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
@@ -29,6 +21,15 @@
 #include "seconds.c"
 
 
+#include "xmalloc.c"
+
+#define OMIT_MAIN
+#include "ransac.c"
+
+
+#include "geometry.c"
+
+
 struct bitmap_font global_font;
 
 double global_harris_sigma = 1;    // s
@@ -36,12 +37,51 @@ double global_harris_k = 0.04;     // k
 double global_harris_flat_th = 20; // t
 int    global_harris_neigh = 3;    // n
 
-#include "xmalloc.c"
+int    global_ransac_ntrials = 10000; // r
+int    global_ransac_minliers = 9;    // i
+double global_ransac_maxerr = 1.5;    // e
+
+
+int find_straight_line_by_ransac(bool *out_mask, float line[3],
+		float *points, int npoints,
+		int ntrials, float max_err)
+{
+	return ransac(out_mask, line, points, 2, npoints, 3,
+			distance_of_point_to_straight_line,
+			straight_line_through_two_points,
+			4, ntrials, 3, max_err, NULL, NULL);
+}
+
+struct drawing_state {
+	int w, h;
+	float *color;
+	float *frgb;
+};
+
+static void plot_frgb_pixel(int i, int j, void *ee)
+{
+	struct drawing_state *e = ee;
+	if (!insideP(e->w, e->h, i, j))
+		return;
+	e->frgb[3*(j * e->w + i) + 0] = e->color[0];
+	e->frgb[3*(j * e->w + i) + 1] = e->color[1];
+	e->frgb[3*(j * e->w + i) + 2] = e->color[2];
+}
+
+static void draw_segment_frgb(float *frgb, int w, int h,
+		int from[2], int to[2], float color[3])
+{
+	struct drawing_state e = {.w = w, .h = h, .frgb = frgb, .color = color};
+	traverse_segment(from[0], from[1], to[0], to[1], plot_frgb_pixel, &e);
+}
+
 
 // process one frame
 static void process_tacu(float *out, float *in, int w, int h, int pd)
 {
-	// convert image to gray
+	double framerate = seconds();
+
+	// convert image to gray (and put it into rafa's image structure)
 	image_double in_gray = new_image_double(w, h);
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
@@ -97,11 +137,44 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			out[3*idx + 1] = 255;
 			out[3*idx + 2] = 0;
 		}
-		//int idx = y*w + x;
-		//if (idx < 0 || idx >= w*h) continue;
-		//out[3*idx + 0] = 0;
-		//out[3*idx + 1] = 0;
-		//out[3*idx + 2] = 255;
+	}
+
+	// compute ransac
+	if (hp->size > 8)
+	{
+		// data for ransac
+		int n = hp->size;
+		float *data = xmalloc(2*n * sizeof*data);
+		for (int i = 0; i < 2*n; i++)
+			data[i] = hp->values[i];
+		bool *mask = xmalloc(n * sizeof*mask);
+
+		// find line
+		float line[3];
+		int n_inliers = find_straight_line_by_ransac(mask, line,
+				data, n,
+				global_ransac_ntrials, global_ransac_maxerr);
+
+		// plot the line, if found
+		if (n_inliers > global_ransac_minliers)
+		{
+			//printf("RANSAC(%d): %g %g %g\n", n_inliers,
+			//		line[0], line[1], line[2]);
+			double dline[3] = {line[0], line[1], line[2]};
+			double rectangle[4] = {0, 0, w, h};
+			double segment[4];
+			bool r = cut_line_with_rectangle(segment, segment+2,
+					dline, rectangle, rectangle+2);
+			if (!r) fprintf(stderr, "WARNING: bad line!\n");
+			int ifrom[2] = {round(segment[0]), round(segment[1])};
+			int ito[2] = {round(segment[2]), round(segment[3])};
+			float fred[3] = {0, 0, 255};
+			draw_segment_frgb(out, w, h, ifrom, ito, fred);
+		}
+
+		// cleanup
+		free(mask);
+		free(data);
 	}
 
 	free_ntuple_list(hp);
@@ -116,12 +189,23 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			global_harris_neigh);
 	float fg[] = {0, 255, 0};
 	put_string_in_float_image(out,w,h,3, 5,5, fg, 0, &global_font, buf);
+	snprintf(buf, 1000, "ransac ntrials = %d\nransac minliers = %d\n"
+			"ransac maxerr = %g",
+			global_ransac_ntrials,
+			global_ransac_minliers,
+			global_ransac_maxerr);
+	put_string_in_float_image(out,w,h,3, 105,5, fg, 0, &global_font, buf);
+
+	framerate = seconds() - framerate;
+	snprintf(buf, 1000, "%g Hz", 1/framerate);
+	put_string_in_float_image(out,w,h,3, 305,5, fg, 0, &global_font, buf);
 }
 
 int main( int argc, char *argv[] )
 {
-	if (argc != 1)
-		return EXIT_FAILURE;
+	if (argc != 2)
+		return fprintf(stderr, "usage:\n\t%s <cam_id>\n", *argv);
+	int cam_id = atoi(argv[1]);
 
 	global_font = *xfont_8x13;
 	global_font = reformat_font(global_font, UNPACKED);
@@ -131,7 +215,7 @@ int main( int argc, char *argv[] )
 	int       key = 0;
 
 	/* initialize camera */
-	capture = cvCaptureFromCAM( 1 );
+	capture = cvCaptureFromCAM( cam_id );
 	//cvCaptureFromCAM
 	//capture.set(CVCAP_IMAGE_WIDTH, 1920);
 
@@ -216,6 +300,14 @@ int main( int argc, char *argv[] )
 		if (key == 'n' && global_harris_neigh > 1)
 			global_harris_neigh -= 1;
 		if (key == 'N') global_harris_neigh += 1;
+		if (key == 'r' && global_ransac_ntrials > 10)
+			global_ransac_ntrials /= wheel_factor;
+		if (key == 'R') global_ransac_ntrials *= wheel_factor;
+		if (key == 'i' && global_ransac_minliers > 2)
+			global_ransac_minliers -= 1;
+		if (key == 'I') global_ransac_minliers += 1;
+		if (key == 'e') global_ransac_maxerr /= wheel_factor;
+		if (key == 'E') global_ransac_maxerr *= wheel_factor;
 		if (isalpha(key)) {
 			printf("harris_sigma = %g\n", global_harris_sigma);
 			printf("harris_k = %g\n", global_harris_k);
