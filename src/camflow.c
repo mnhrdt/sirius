@@ -35,10 +35,10 @@ struct bitmap_font global_font;
 double global_harris_sigma = 1;    // s
 double global_harris_k = 0.04;     // k
 double global_harris_flat_th = 20; // t
-int    global_harris_neigh = 3;    // n
+int    global_harris_neigh = 1;    // n
 
-int    global_ransac_ntrials = 10000; // r
-int    global_ransac_minliers = 9;    // i
+int    global_ransac_ntrials = 1000; // r
+int    global_ransac_minliers = 7;    // i
 double global_ransac_maxerr = 1.5;    // e
 
 
@@ -325,7 +325,7 @@ int main( int argc, char *argv[] )
 		if (key == 'K') global_harris_k *= wheel_factor;
 		if (key == 't') global_harris_flat_th /= wheel_factor;
 		if (key == 'T') global_harris_flat_th *= wheel_factor;
-		if (key == 'n' && global_harris_neigh > 1)
+		if (key == 'n' && global_harris_neigh > 0)
 			global_harris_neigh -= 1;
 		if (key == 'N') global_harris_neigh += 1;
 		if (key == 'r' && global_ransac_ntrials > 10)

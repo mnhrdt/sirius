@@ -178,14 +178,13 @@ ntuple_list harris2( image_double image, double sigma,
 {
   image_double cornerR;
   unsigned int x,y,xx,yy;
-  double max;
   ntuple_list out = new_ntuple_list(2);
   
   /* get memory */
   //A = new_image_double_ini(image->xsize,image->ysize,0.0);
   //B = new_image_double_ini(image->xsize,image->ysize,0.0);
   //C = new_image_double_ini(image->xsize,image->ysize,0.0);
-  cornerR = new_image_double_ini(image->xsize,image->ysize,-1.0);
+  cornerR = new_image_double_ini(image->xsize,image->ysize,INFINITY);
 
   gaussian_filter(image,sigma);
 
@@ -202,6 +201,10 @@ ntuple_list harris2( image_double image, double sigma,
         B->data[ x + y * B->xsize ] = dy*dy;
         C->data[ x + y * C->xsize ] = dx*dy;
 	*/
+	double dx = image->data[ (x+1) + y * image->xsize ]
+		   -image->data[ (x-1) + y * image->xsize ];
+	double dy = image->data[ x + (y+1) * image->xsize ]
+		   -image->data[ x + (y-1) * image->xsize ];
         double dxx =   image->data[ (x+1) + y * image->xsize ]
                    +   image->data[ (x-1) + y * image->xsize ]
                    - 2*image->data[ x + y * image->xsize ];
@@ -217,9 +220,10 @@ ntuple_list harris2( image_double image, double sigma,
         double c = dxy;
         double T = a+b;            /* trace */
         double D = a*b - c*c;      /* determinant */
-        double R = D - k * T * T;  /* Harris & Stephens corner response */
-        if( T > flat_th && R > 0.0 ) /* possible corner */
-          cornerR->data[ x + y * cornerR->xsize ] = R;
+        double R0 = D - k * T * T;  /* Harris & Stephens corner response */
+	//double R1 = hypot(dx, dy);
+        if( T > flat_th && R0 > 0) /* possible corner */
+          cornerR->data[ x + y * cornerR->xsize ] = image->data[ (x+1) + y * image->xsize ] ;
       }
 
   /* apply Gaussian filter to A,B,C */
@@ -229,20 +233,20 @@ ntuple_list harris2( image_double image, double sigma,
   gaussian_filter(C,sigma);
   */
 
-  /* compute corners as local maxima of cornerR */
+  /* compute corners as local maxima of image */
   for(x=neigh;x<image->xsize-neigh;x++)
     for(y=neigh;y<image->ysize-neigh;y++)
-      if( cornerR->data[ x + y * cornerR->xsize ] > 0.0 )
+      if( isfinite(cornerR->data[ x + y * cornerR->xsize ]) )
         {
-          max = -1.0;
+          double min = INFINITY;
           for( xx=x-neigh; xx<=x+neigh; xx++ )
             for( yy=y-neigh; yy<=y+neigh; yy++ )
-              if( xx!=x || yy!=y ) /* strict maximum */
-                if( cornerR->data[ xx + yy * cornerR->xsize ] > max )
-                  max = cornerR->data[ xx + yy * cornerR->xsize ];
+              if( xx!=x || yy!=y ) /* strict minimum */
+                if( image->data[ xx + yy * image->xsize ] < min )
+                  min = image->data[ xx + yy * image->xsize ];
 
-          /* if strict maximum, a Harris point was found */
-          if( cornerR->data[ x + y * cornerR->xsize ] > max )
+          /* if strict minimum, a point was found */
+          if( image->data[ x + y * image->xsize ] < min )
             {
               /* if needed, alloc more tuples to 'out' */
               if( out->size == out->max_size ) enlarge_ntuple_list(out);

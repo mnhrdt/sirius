@@ -209,14 +209,14 @@ int ransac(
 		void *usr
 		)
 {
-	fprintf(stderr, "running RANSAC over %d datapoints of dimension %d\n",
-			n, datadim);
-	fprintf(stderr, "will try to find a model of size %d from %d points\n",
-		       	modeldim, nfit);
-	fprintf(stderr, "we will make %d trials and keep the best with e<%g\n",
-			ntrials, max_error);
-	fprintf(stderr, "a model must have more than %d inliers\n",
-			min_inliers);
+	//fprintf(stderr, "running RANSAC over %d datapoints of dimension %d\n",
+	//		n, datadim);
+	//fprintf(stderr, "will try to find a model of size %d from %d points\n",
+	//	       	modeldim, nfit);
+	//fprintf(stderr, "we will make %d trials and keep the best with e<%g\n",
+	//		ntrials, max_error);
+	//fprintf(stderr, "a model must have more than %d inliers\n",
+	//		min_inliers);
 
 	int best_ninliers = 0;
 	float best_model[modeldim];
