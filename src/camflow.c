@@ -38,8 +38,13 @@ double global_harris_flat_th = 20; // t
 int    global_harris_neigh = 1;    // n
 
 int    global_ransac_ntrials = 1000; // r
-int    global_ransac_minliers = 7;    // i
+int    global_ransac_minliers = 22;    // i
 double global_ransac_maxerr = 1.5;    // e
+
+double global_mauricio_ssat = 200;
+double global_mauricio_gth = 40.00;
+int    global_mauricio_Cth = 3000;
+double global_mauricio_Sth = 20.0;
 
 
 int find_straight_line_by_ransac(bool *out_mask, float line[3],
@@ -47,7 +52,7 @@ int find_straight_line_by_ransac(bool *out_mask, float line[3],
 		int ntrials, float max_err)
 {
 	if (npoints < 2)
-		return false;
+		return 0;
 	return ransac(out_mask, line, points, 2, npoints, 3,
 			distance_of_point_to_straight_line,
 			straight_line_through_two_points,
@@ -77,6 +82,51 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 	traverse_segment(from[0], from[1], to[0], to[1], plot_frgb_pixel, &e);
 }
 
+static bool compute_mauricio(double *x, int w, int h)
+{
+	// compute % of saturated pixels
+	double sat_percent = 0;
+	for (int i = 0; i < w*h; i++)
+		if (x[i] > global_mauricio_ssat)
+			sat_percent += 1;
+	sat_percent /= w*h;
+	sat_percent *= 100;
+
+	// note: do not resample (simply pick the correct neighbors)
+	// note: do not run expensive normalization (we'll see if it matters)
+
+	// compute sobel statistics
+	int num_cx_large = 0;
+	int num_cy_large = 0;
+	for (int j = 100; j < h-100; j += 2)
+	for (int i = 100; i < w-100; i += 2)
+	{
+		// sobel neighborhood
+		// Vmm V0m Vpm
+		// Vm0 V00 Vp0
+		// Vmp V0p Vpp
+		double Vmm = x[(i-2) + (j-2)*w];
+		double V0m = x[(i+0) + (j-2)*w];
+		double Vpm = x[(i+2) + (j-2)*w];
+		double Vm0 = x[(i-2) + (j+0)*w];
+		double V00 = x[(i+0) + (j+0)*w];
+		double Vp0 = x[(i+2) + (j+0)*w];
+		double Vmp = x[(i-2) + (j+2)*w];
+		double V0p = x[(i+0) + (j+2)*w];
+		double Vpp = x[(i+2) + (j+2)*w];
+		double gx = Vpm - Vmm + 2*(Vp0 - Vm0) + Vpp - Vmp;
+		double gy = Vmp - Vmm + 2*(V0p - V0m) + Vpp - Vpm;
+		if (fabs(gx) > global_mauricio_gth) num_cx_large += 1;
+		if (fabs(gy) > global_mauricio_gth) num_cy_large += 1;
+	}
+	fprintf(stderr, "sat_percent, cxlarge, cylarge = %g %d %d\n",
+			sat_percent, num_cx_large, num_cy_large);
+
+	return
+		(num_cx_large > global_mauricio_Cth) &&
+		(num_cy_large > global_mauricio_Cth) &&
+		(sat_percent < global_mauricio_Sth);
+}
 
 // process one frame
 static void process_tacu(float *out, float *in, int w, int h, int pd)
@@ -94,6 +144,9 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 		float b = in[3*idx+2];
 		in_gray->data[idx] = (r + g + b)/3;
 	}
+
+	// compute mauricio test
+	bool mauricio = compute_mauricio(in_gray->data, w, h);
 
 	// fill-in gray values (for visualization)
 	for (int j = 0; j < h; j++)
@@ -114,8 +167,8 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			global_harris_neigh
 			);
 	tic = seconds() - tic;
-	fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
-			tic*1000, 1/tic);
+	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
+	//		tic*1000, 1/tic);
 
 	// plot detected keypoints
 	int n[][2] = {
@@ -151,27 +204,26 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			data[i] = hp->values[i];
 		bool *mask = xmalloc(n * sizeof*mask);
 
-		// find line
-		float line[3];
-		int n_inliers = find_straight_line_by_ransac(mask, line,
-				data, n,
-				global_ransac_ntrials, global_ransac_maxerr);
-
-		// plot the line, if found
-		if (n_inliers > global_ransac_minliers)
+		for (int i = 0; i < 10; i++)
 		{
+			// find line
+			float line[3];
+			int n_inliers = find_straight_line_by_ransac(mask, line,
+					data, n,
+					global_ransac_ntrials,
+					global_ransac_maxerr);
+			if (n_inliers < global_ransac_minliers)
+				break;
 			double dline[3] = {line[0], line[1], line[2]};
 			double rectangle[4] = {0, 0, w, h};
 			double segment[4];
 			bool r = cut_line_with_rectangle(segment, segment+2,
 					dline, rectangle, rectangle+2);
-			if (!r) fprintf(stderr, "WARNING: bad line!\n");
 			int ifrom[2] = {round(segment[0]), round(segment[1])};
 			int ito[2] = {round(segment[2]), round(segment[3])};
 			float fred[3] = {0, 0, 255};
 			draw_segment_frgb(out, w, h, ifrom, ito, fred);
-
-			// try to find a second line
+			// exclude the points of this segment
 			int cx = 0;
 			for (int i = 0; i < n; i++)
 				if (!mask[i]) // keep only the unused points
@@ -182,23 +234,7 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 				}
 			assert(cx + n_inliers == n);
 			n = cx;
-
-			n_inliers = find_straight_line_by_ransac(mask, line,
-				data, n,
-				global_ransac_ntrials, global_ransac_maxerr);
-
-			if (n_inliers > global_ransac_minliers)
-			{
-				double dline[3] = {line[0], line[1], line[2]};
-				r = cut_line_with_rectangle(segment,segment+2,
-						dline, rectangle, rectangle+2);
-				int ifrom[2] = {round(segment[0]), round(segment[1])};
-				int ito[2] = {round(segment[2]), round(segment[3])};
-				float fblue[3] = {255, 0, 0};
-				draw_segment_frgb(out, w, h, ifrom, ito, fblue);
-			}
 		}
-
 
 		// cleanup
 		free(mask);
@@ -215,18 +251,21 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			global_harris_k,
 			global_harris_flat_th,
 			global_harris_neigh);
-	float fg[] = {0, 255, 0};
+	float fg[] = {0, 255, 0}, red[] = {0, 0, 255};
 	put_string_in_float_image(out,w,h,3, 5,5, fg, 0, &global_font, buf);
 	snprintf(buf, 1000, "ransac ntrials = %d\nransac minliers = %d\n"
 			"ransac maxerr = %g",
 			global_ransac_ntrials,
 			global_ransac_minliers,
 			global_ransac_maxerr);
-	put_string_in_float_image(out,w,h,3, 105,5, fg, 0, &global_font, buf);
+	put_string_in_float_image(out,w,h,3, 155,5, fg, 0, &global_font, buf);
 
 	framerate = seconds() - framerate;
 	snprintf(buf, 1000, "%g Hz", 1/framerate);
-	put_string_in_float_image(out,w,h,3, 305,5, fg, 0, &global_font, buf);
+	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
+	snprintf(buf, 1000, "mauricio: %s", mauricio?"sharp":"blurred");
+	put_string_in_float_image(out,w,h,3, 355,15,
+			mauricio?fg:red, 0, &global_font, buf);
 }
 
 int main( int argc, char *argv[] )
