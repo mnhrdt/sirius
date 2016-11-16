@@ -1,0 +1,162 @@
+\documentclass[t]{beamer}
+\usepackage[utf8]{inputenc} % to be able to type unicode text directly
+\usepackage{inconsolata} % for a nicer (e.g. non-courier) tt family font
+
+\usepackage{graphicx} % to include figures
+\usepackage{hyperref,url} % to make clickable hyperlinks
+\usepackage{minted} % for code insets
+\usepackage{array} %
+\usepackage{bbm} % for blackboard 1
+
+\usepackage{tikz}
+
+\usepackage{soul}
+\usepackage{cancel}
+\renewcommand{\CancelColor}{\color{red}}
+
+\colorlet{darkgreen}{black!50!green}
+\colorlet{ddarkgreen}{black!75!green}
+\colorlet{darkred}{black!50!red}
+\definecolor{ipol}{rgb}{.36,.29,.65}
+\usecolortheme[named=ipol]{structure}
+\definecolor{term}{rgb}{.9,.9,.9}
+
+\newcommand{\reference}[1] {{\scriptsize \color{gray}  #1 }}
+\newcommand{\referencep}[1] {{\tiny \color{gray}  #1 }}
+\newcommand{\unit}[1] {{\tiny \color{gray}  #1 }}
+
+\def\R{\mathbf{R}}
+\def\F{\mathcal{F}}
+\def\x{\mathbf{x}}
+\def\u{\mathbf{u}}
+\def\FFT{\mathtt{FFT}}
+\def\IFFT{\mathtt{IFFT}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\patch}{patch}
+
+% disable spacing around verbatim
+\usepackage{etoolbox}
+\makeatletter
+\preto{\@verbatim}{\topsep=0pt \partopsep=0pt }
+\makeatother
+
+\mode<presentation>
+\setbeamercolor*{author in head/foot}{parent=none}
+\setbeamercolor*{title in head/foot}{parent=none}
+\setbeamercolor*{date in head/foot}{parent=none}
+\defbeamertemplate*{footline}{infoline theme}
+{
+  \leavevmode%
+  \hfill\color{darkgreen}
+   \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+  \vskip0pt%
+}
+
+\makeatletter
+\newcommand\SoulColor{%
+  \let\set@color\beamerorig@set@color
+  \let\reset@color\beamerorig@reset@color}
+\makeatother
+\newcommand<>{\St}[1]{\only#2{\SoulColor\st{#1}}}
+\setstcolor{red}
+
+\mode<all>
+\setbeamertemplate{navigation symbols}{}
+
+%\setbeamersize{text margin left=1em,text margin right=1em} (does not work)
+%\setbeamersize{text margin left=1em}
+
+
+\begin{document}
+
+\begin{frame}
+	\frametitle{Plan}
+
+	\begin{enumerate}
+		\item The CMLA pipeline thus far:
+			\begin{enumerate}
+				\item Realtime blurred frame detection (mauricio)
+				\item Gaussian filtering---no optimization yet
+				\item Realtime dark blob detection
+				\item Realtime alignment detection
+			\end{enumerate}
+		\item Note on constellation matching
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Realtime dark blob detection}
+	Input: gray-scale image\\
+	Output: list of points
+
+	\bigskip
+
+	Algorithm: find {\bf local minima} of the $\sigma$-blurred image
+	that satisfy two local ``roundness'' criteria.
+
+	\[
+		u_{xx}+u_{yy} > \tau
+		\qquad
+		\qquad
+		\qquad
+		\frac{u_{xx}u_{yy}-u_{xy}^2}{(u_{xx}+u_{yy})^2}>\kappa
+	\]
+
+	\vfill
+
+	%Parameters:\\
+	\begin{tabular}{l|l|l}
+		parameter & meaning & default value \\
+		\hline
+		$\sigma$ & size of the pre-filtering & $1.0$ \\
+		$\tau$ & strength of the local minimum & $20$ \\
+		$\kappa$ & roundness measure & $0.04$ \\
+	\end{tabular}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Realtime alignment detection}
+	Input: list of points\\
+	Output: list of straight lines
+
+	\bigskip
+
+	Algorithm (RANSAC): test many lines determined by several random pairs of
+	points and keep the best one.
+
+	\bigskip
+
+	Once an alignment is found, these points are removed from the list and
+	RANSAC is run again.
+
+	\vfill
+
+	%Parameters:\\
+	\begin{tabular}{l|l|l}
+		parameter & meaning & default value \\
+		\hline
+		$N_{runs}$ & number of times RANSAC is run & $10$ \\
+		$N_{trials}$ & number of trials for each RANSAC & $1000$ \\
+		$M_{inliers}$ & minimum required number of inliers & $6$ \\
+		$\delta$ & distance tolerance & $1.0$ \\
+	\end{tabular}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Note on constellation matching}
+
+	Spratling IV, B. B., \& Mortari, D. (2009). \emph{A Survey on Star Identification Algorithms}. Algorithms, 2, 93-107.
+
+	\bigskip
+
+	Liebe, C. C. (1992). \emph{Pattern recognition of star constellations for spacecraft applications}. IEEE Aerospace and Electronic Systems Magazine, 7(6), 34-41.
+
+	\vfill
+
+	In astronomy, constellation matching is easier, because only three parameters need to be found (the orientation of the camera).  Detecting REVEAL labels may be harder because there are more parameters (projection, label deformation).
+\end{frame}
+
+\end{document}
+
+
+% vim:sw=4 ts=4 spell spelllang=en:
