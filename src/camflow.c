@@ -174,8 +174,11 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 	int n[][2] = {
 		{0,0},
 	       	{-1,0}, {0,-1}, {0,1}, {1,0}, // 5
-		{-1,-1}, {-1,+1}, {1,-1}, {1,+1} // 9
-	}, nn = 9;
+		{-1,-1}, {-1,+1}, {1,-1}, {1,+1}, // 9
+		{-2,0}, {2,0}, {0,-2}, {0,2}, // 13
+		{-2,-1}, {2,-1}, {-1,-2}, {-1,2},
+		{-2,1}, {2,1}, {1,-2}, {1,2} // 21
+	}, nn = 21;
 
 	for (int i = 0; i < hp->size; i++)
 	{
@@ -189,8 +192,8 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			int idx = yy*w + xx;
 			if (idx < 0 || idx >= w*h) continue;
 			out[3*idx + 0] = 0;
-			out[3*idx + 1] = 255;
-			out[3*idx + 2] = 0;
+			out[3*idx + 1] = p?255:0;
+			out[3*idx + 2] = p?0:255;
 		}
 	}
 
