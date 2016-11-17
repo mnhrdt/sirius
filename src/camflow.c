@@ -7,11 +7,12 @@
 
 
 
-#include "harris/harris.c"
-#include "harris/gauss.c"
-#include "harris/image.c"
-#include "harris/ntuple.c"
-#include "harris/misc.c"
+//#include "harris/harris.c"
+//#include "harris/gauss.c"
+//#include "harris/image.c"
+//#include "harris/ntuple.c"
+//#include "harris/misc.c"
+#include "harressian.c"
 
 #define OMIT_MAIN_FONTU
 #include "fontu.c"
@@ -82,7 +83,7 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 	traverse_segment(from[0], from[1], to[0], to[1], plot_frgb_pixel, &e);
 }
 
-static bool compute_mauricio(double *x, int w, int h)
+static bool compute_mauricio(float *x, int w, int h)
 {
 	// compute % of saturated pixels
 	double sat_percent = 0;
@@ -119,8 +120,8 @@ static bool compute_mauricio(double *x, int w, int h)
 		if (fabs(gx) > global_mauricio_gth) num_cx_large += 1;
 		if (fabs(gy) > global_mauricio_gth) num_cy_large += 1;
 	}
-	fprintf(stderr, "sat_percent, cxlarge, cylarge = %g %d %d\n",
-			sat_percent, num_cx_large, num_cy_large);
+	//fprintf(stderr, "sat_percent, cxlarge, cylarge = %g %d %d\n",
+	//		sat_percent, num_cx_large, num_cy_large);
 
 	return
 		(num_cx_large > global_mauricio_Cth) &&
@@ -134,7 +135,7 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 	double framerate = seconds();
 
 	// convert image to gray (and put it into rafa's image structure)
-	image_double in_gray = new_image_double(w, h);
+	float *gray = xmalloc(w*h*sizeof*gray);
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
 	{
@@ -142,33 +143,35 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 		float r = in[3*idx+0];
 		float g = in[3*idx+1];
 		float b = in[3*idx+2];
-		in_gray->data[idx] = (r + g + b)/3;
+		gray[idx] = (r + g + b) / 3;
 	}
 
 	// compute mauricio test
-	bool mauricio = compute_mauricio(in_gray->data, w, h);
+	bool mauricio = compute_mauricio(gray, w, h);
+
+
+	// computi harris-hessian
+	int max_keypoints = 2000;
+	float point[2*max_keypoints];
+	double tic = seconds();
+	int npoints = harris(point, max_keypoints, gray, w, h,
+			global_harris_sigma,
+			global_harris_k,
+			global_harris_flat_th);
+	fprintf(stderr, "npoints = %d\n", npoints);
+	tic = seconds() - tic;
+	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
+	//		tic*1000, 1/tic);
 
 	// fill-in gray values (for visualization)
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
 	{
 		int idx = j*w + i;
-		out[3*idx+0] = in_gray->data[idx];
-		out[3*idx+1] = in_gray->data[idx];
-		out[3*idx+2] = in_gray->data[idx];
+		out[3*idx+0] = gray[idx];
+		out[3*idx+1] = gray[idx];
+		out[3*idx+2] = gray[idx];
 	}
-
-	// computi harris-hessian
-	double tic = seconds();
-	ntuple_list hp = harris2(in_gray,
-			global_harris_sigma,
-			global_harris_k,
-			global_harris_flat_th,
-			global_harris_neigh
-			);
-	tic = seconds() - tic;
-	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
-	//		tic*1000, 1/tic);
 
 	// plot detected keypoints
 	int n[][2] = {
@@ -180,11 +183,10 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 		{-2,1}, {2,1}, {1,-2}, {1,2} // 21
 	}, nn = 21;
 
-	for (int i = 0; i < hp->size; i++)
+	for (int i = 0; i < npoints; i++)
 	{
-		assert(hp->dim == 2);
-		int x = hp->values[2*i+0];
-		int y = hp->values[2*i+1];
+		int x = point[2*i+0];
+		int y = point[2*i+1];
 		for (int p = 0; p < nn; p++)
 		{
 			int xx = x + n[p][0];
@@ -198,13 +200,10 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 	}
 
 	// compute ransac
-	if (hp->size > 1)
+	if (npoints > 1)
 	{
 		// data for ransac
-		int n = hp->size;
-		float *data = xmalloc(2*n * sizeof*data);
-		for (int i = 0; i < 2*n; i++)
-			data[i] = hp->values[i];
+		int n = npoints;
 		bool *mask = xmalloc(n * sizeof*mask);
 
 		for (int i = 0; i < 10; i++)
@@ -212,7 +211,7 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			// find line
 			float line[3];
 			int n_inliers = find_straight_line_by_ransac(mask, line,
-					data, n,
+					point, n,
 					global_ransac_ntrials,
 					global_ransac_maxerr);
 			if (n_inliers < global_ransac_minliers)
@@ -231,8 +230,8 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			for (int i = 0; i < n; i++)
 				if (!mask[i]) // keep only the unused points
 				{
-					data[2*cx+0] = data[2*i+0];
-					data[2*cx+1] = data[2*i+1];
+					point[2*cx+0] = point[2*i+0];
+					point[2*cx+1] = point[2*i+1];
 					cx++;
 				}
 			assert(cx + n_inliers == n);
@@ -241,11 +240,9 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 
 		// cleanup
 		free(mask);
-		free(data);
 	}
 
-	free_ntuple_list(hp);
-	free_image_double(in_gray);
+	free(gray);
 
 	// draw HUD
 	char buf[1000];
