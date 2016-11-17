@@ -69,6 +69,18 @@
 
 \begin{document}
 
+\begin{frame}[plain]
+	\vfill
+	\vfill
+	\begin{center}
+		\Large\bf Realtime detection of REVEAL labels
+	\end{center}
+	\vfill
+	\vfill
+	Meeting CMLA/SURYS\\
+	17--11--2016
+\end{frame}
+
 \begin{frame}
 	\frametitle{Plan}
 
@@ -80,14 +92,42 @@
 				\item Realtime dark blob detection
 				\item Realtime alignment detection
 			\end{enumerate}
-		\item Note on constellation matching
+		\item Thinks we are looking at
+			\begin{enumerate}
+				\item Constellation matching
+				\item 1D techniques
+			\end{enumerate}
 	\end{enumerate}
 \end{frame}
 
 \begin{frame}
+	\frametitle{Realtime blurred frame detection (mauricio)}
+	{\bf Input:} gray-scale image\\
+	{\bf Output:} binary decision whether the image is sharp or blurred
+
+	\bigskip
+
+	Algorithm: check whether the image is contrasted enough and there are
+	enough points with high enough gradient.
+
+	\vfill
+
+	%Parameters:\\
+	\begin{tabular}{l|l|l}
+		parameter & meaning & default value \\
+		\hline
+		$\Delta_{\mathrm{min}}$ & minimal contrast & 100 gray levels \\
+		$g_{\mathrm{th}}$ & minimal gradient & $40.0$ gray/pix \\
+		$C_{\mathrm{th}}$ & required nr. of pixels with high gradient & $3000$ \\
+		$s_{\mathrm{sat}}$ & saturation threshold & $200$ gray levels \\
+		$S_{\mathrm{th}}$ & allowed percent of saturated pixels & $20\%$ \\
+	\end{tabular}
+\end{frame}
+
+\begin{frame}
 	\frametitle{Realtime dark blob detection}
-	Input: gray-scale image\\
-	Output: list of points
+	{\bf Input:} gray-scale image\\
+	{\bf Output:} list of points
 
 	\bigskip
 
@@ -108,16 +148,16 @@
 	\begin{tabular}{l|l|l}
 		parameter & meaning & default value \\
 		\hline
-		$\sigma$ & size of the pre-filtering & $1.0$ \\
-		$\tau$ & strength of the local minimum & $20$ \\
+		$\sigma$ & size of the pre-filtering & $1.0$ pixels \\
+		$\tau$ & strength of the local minimum & $20$ gray/pixel$^2$\\
 		$\kappa$ & roundness measure & $0.04$ \\
 	\end{tabular}
 \end{frame}
 
 \begin{frame}
 	\frametitle{Realtime alignment detection}
-	Input: list of points\\
-	Output: list of straight lines
+	{\bf Input:} list of points\\
+	{\bf Output:} list of straight lines
 
 	\bigskip
 
@@ -138,22 +178,78 @@
 		$N_{runs}$ & number of times RANSAC is run & $10$ \\
 		$N_{trials}$ & number of trials for each RANSAC & $1000$ \\
 		$M_{inliers}$ & minimum required number of inliers & $6$ \\
-		$\delta$ & distance tolerance & $1.0$ \\
+		$\delta$ & distance tolerance & $1.0$ pixels \\
 	\end{tabular}
 \end{frame}
 
 \begin{frame}
-	\frametitle{Note on constellation matching}
+	\frametitle{Summary of performances}
 
-	Spratling IV, B. B., \& Mortari, D. (2009). \emph{A Survey on Star Identification Algorithms}. Algorithms, 2, 93-107.
+	\begin{enumerate}
+		\item Blurred frame detection: no performance penalty ($>30Hz$)
+		\item Blob detection: slow, due to  Gaussian pre-filtering (20Hz)
+		\item Alignement detection: no performance penalty of $10\times 500$ trials for up to $200$ points ($>30Hz$).
+	\end{enumerate}
 
-	\bigskip
+	\vfill
+	Possible optimizations
+	\begin{enumerate}
+		\item Use a faster, less precise, Gaussian filtering
+		\item Detect the points in a multiscale pyramid, to allow smaller~$\sigma$ with equivalent effect.
+	\end{enumerate}
 
-	Liebe, C. C. (1992). \emph{Pattern recognition of star constellations for spacecraft applications}. IEEE Aerospace and Electronic Systems Magazine, 7(6), 34-41.
+\end{frame}
+
+\begin{frame}
+	\frametitle{Constellation matching}
+	\framesubtitle{What to do if you are lost in space?  This is a solved problem}
 
 	\vfill
 
-	In astronomy, constellation matching is easier, because only three parameters need to be found (the orientation of the camera).  Detecting REVEAL labels may be harder because there are more parameters (projection, label deformation).
+	{\scriptsize
+	Salomon, P. M., Goss, W. C. \emph{A microprocessor-controlled CCD star tracker.} AIAA, Aerospace Sciences Meeting. {\bf 1976}.
+
+	\bigskip
+
+	Junkins, J. L., White, C.C., Turner, J.D. \emph{Star pattern recognition for real time attitude determination.} Journal of the Astronautical Sciences, {\bf 1977}
+
+	\bigskip
+
+	Liebe, C. C. \emph{Pattern recognition of star constellations for spacecraft applications}. IEEE Aerospace and Electronic Systems Magazine, {\bf 1992}.
+
+	\bigskip
+
+	Spratling, B. B., Mortari, D. \emph{A Survey on Star Identification Algorithms}. Algorithms, {\bf 2009}
+
+	}
+
+	\vfill
+	\vfill
+
+	In astronomy, constellation matching is easier, because only three
+	parameters need to be found (the orientation of the camera).  Detecting
+	REVEAL labels is harder because there are more parameters (projection,
+	label deformation).
+\end{frame}
+
+\begin{frame}
+	\frametitle{1D techniques}
+	\framesubtitle{QR codes are trivial to detect in realtime.  Why?}
+
+	\begin{tabular}{cc}
+		\includegraphics[width=0.45\linewidth]{f/qrbillboard.jpg}&
+		\pause
+		\includegraphics[width=0.45\linewidth]{f/qrpattern.jpg}\\
+	\end{tabular}
+
+	Because the 3 corners can be detected by scanning 1D lines.
+
+\end{frame}
+
+\begin{frame}
+	\vfill
+	demo: pipeline parameters visualization
+
 \end{frame}
 
 \end{document}
