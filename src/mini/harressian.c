@@ -1,19 +1,29 @@
+// implementation of the "harris hessian" keypoint detector
+
 #include "xmalloc.c"
 
 void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 {
+	// build 3x3 approximation of gaussian kernel
+	float k0 = 1;
+	float k1 = exp(-1/(2*sigma*sigma));
+	float k2 = exp(-sqrt(2)/(2*sigma*sigma));
+	float kn = k0 + 4*k1 + 4*k2;
+	float k[3][3] = {{k2, k1, k2}, {k1, k0, k1}, {k2, k1, k2}};
+
+	// hand-made convolution
 	for (int j = 1; j < h - 1; j ++)
 	for (int i = 1; i < w - 1; i ++)
 	{
 		float ax = 0;
-		for (int dj = -1; dj <= 1; dj++)
-		for (int di = -1; di <= 1; di++)
+		for (int dj = 0; dj < 3; dj++)
+		for (int di = 0; di < 3; di++)
 		{
-			int ii = i + di;
-			int jj = j + dj;
-			ax += in[ii+jj*w];
+			int ii = i + di - 1;
+			int jj = j + dj - 1;
+			ax += k[dj][di] * in[ii+jj*w];
 		}
-		out[i+j*w] = ax / 9;
+		out[i+j*w] = ax/kn;
 	}
 }
 
@@ -75,8 +85,8 @@ int harris(float *out_xy, int max_npoints,
 {
 	float *sx = xmalloc(w * h * sizeof*sx);
 	poor_man_gaussian_filter(sx, x, w, h, sigma);
-	poor_man_gaussian_filter(x, sx, w, h, sigma);
-	poor_man_gaussian_filter(sx, x, w, h, sigma);
+	//poor_man_gaussian_filter(x, sx, w, h, sigma);
+	//poor_man_gaussian_filter(sx, x, w, h, sigma);
 
 	int n = 0;
 	for (int j = 1; j < h - 1; j++)
@@ -85,26 +95,29 @@ int harris(float *out_xy, int max_npoints,
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
 		// Vmp V0p Vpp
-		float Vmm = x[(i-1) + (j-1)*w];
-		float V0m = x[(i+0) + (j-1)*w];
-		float Vpm = x[(i+1) + (j-1)*w];
-		float Vm0 = x[(i-1) + (j+0)*w];
-		float V00 = x[(i+0) + (j+0)*w];
-		float Vp0 = x[(i+1) + (j+0)*w];
-		float Vmp = x[(i-1) + (j+1)*w];
-		float V0p = x[(i+0) + (j+1)*w];
-		float Vpp = x[(i+1) + (j+1)*w];
+		float Vmm = sx[(i-1) + (j-1)*w];
+		float V0m = sx[(i+0) + (j-1)*w];
+		float Vpm = sx[(i+1) + (j-1)*w];
+		float Vm0 = sx[(i-1) + (j+0)*w];
+		float V00 = sx[(i+0) + (j+0)*w];
+		float Vp0 = sx[(i+1) + (j+0)*w];
+		float Vmp = sx[(i-1) + (j+1)*w];
+		float V0p = sx[(i+0) + (j+1)*w];
+		float Vpp = sx[(i+1) + (j+1)*w];
 		if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
 				|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
 			continue;
 		float dxx = Vm0 - 2*V00 + Vp0;
 		float dyy = V0m - 2*V00 + V0p;
-		float dxy = (Vpp + Vmm - Vpm - Vmp)/4;
+		float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
+		float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
+		//float dxy =  (2*V00 +Vpm +Vmp -Vm0 -V0m -Vp0 -V0p)/2;
+		//float dyx = -(2*V00 +Vmm +Vpp -Vm0 -V0p -Vp0 -V0m)/2;
 		//
 		// NOTE XXX TODO : this scheme for dxy has directional aliasing!
 		//
 		float T = dxx + dyy;
-		float D = dxx * dyy - dxy * dxy;
+		float D = dxx * dyy - dxy * dyx;
 		float R0 = D - kappa * T * T;
 		if (T > tau && R0 > 0)
 		{
@@ -116,7 +129,7 @@ int harris(float *out_xy, int max_npoints,
 			goto done;
 	}
 done:	assert(n <= max_npoints);
-	if (outopt) // this is just for debugging purposes
+	if (false && outopt) // this is just for debugging purposes
 	            // all the code below must be removed
 	{
 		for (int i = 0; i < w*h; i++)
@@ -135,11 +148,14 @@ done:	assert(n <= max_npoints);
 			float Vpp = sx[(i+1) + (j+1)*w];
 			float dxx = Vm0 - 2*V00 + Vp0;
 			float dyy = V0m - 2*V00 + V0p;
-			float dxy = (Vpp + Vmm - Vpm - Vmp)/4;
+			//float dxy = (Vpp + Vmm - Vpm - Vmp)/4;
+			//float dyx = dxy;
+			float dxy = (2*V00 +Vpm +Vmp -Vm0 -V0m -Vp0 -V0p)/2;
+			float dyx = -(2*V00 +Vmm +Vpp -Vm0 -V0p -Vp0 -V0m)/2;
 			float T = dxx + dyy;
-			float D = dxx * dyy - dxy * dxy;
+			float D = dxx * dyy - dxy * dyx;
 			float R0 = D - kappa * T * T;
-			outopt[j*w+i] = 255 - 4*fmin(254,fmax(0,D));
+			outopt[j*w+i] = 255 - fmin(254,8*fmax(0,R0));
 			//if (
 			//   V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
 			//	//|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00

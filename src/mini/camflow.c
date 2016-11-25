@@ -21,7 +21,7 @@ struct bitmap_font global_font;
 // parameters of the algorithm (for easy testing)
 
 double global_harris_sigma = 1;    // s
-double global_harris_k = 0.04;     // k
+double global_harris_k = 0.23;     // k
 double global_harris_flat_th = 20; // t
 int    global_harris_neigh = 1;    // n
 
@@ -72,6 +72,7 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 
 static bool compute_mauricio(float *x, int w, int h)
 {
+	return false;
 	// compute % of saturated pixels
 	double sat_percent = 0;
 	for (int i = 0; i < w*h; i++)
