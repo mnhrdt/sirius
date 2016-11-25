@@ -110,10 +110,6 @@ static void fill_random_indices(int *idx, int n, int a, int b)
 	} while (safecount < 100 && !are_different(idx, n));
 	if (safecount == 100)
 		fail("could not generate any model (%d %d)", n, b-a);
-	//fprintf(stderr, "fri");
-	//for (int i = 0; i < n; i++)
-	//	fprintf(stderr, "\t%d", idx[i]);
-	//fprintf(stderr, "\n");
 }
 
 #define MAX_MODELS 10

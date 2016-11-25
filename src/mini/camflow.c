@@ -12,7 +12,6 @@
 #include "geometry.c"         // linear algebra and geometric computations
 
 #include "fontu.c"            // bitmap font library
-#include "fonts/xfont_8x13.c" // the actual font datum used here
 #include "seconds.c"          // function for computing running times
 #include "xmalloc.c"          // retargetable malloc
 
@@ -98,7 +97,7 @@ static bool compute_mauricio(float *x, int w, int h)
 		double V0m = x[(i+0) + (j-2)*w];
 		double Vpm = x[(i+2) + (j-2)*w];
 		double Vm0 = x[(i-2) + (j+0)*w];
-		double V00 = x[(i+0) + (j+0)*w];
+		//double V00 = x[(i+0) + (j+0)*w];
 		double Vp0 = x[(i+2) + (j+0)*w];
 		double Vmp = x[(i-2) + (j+2)*w];
 		double V0p = x[(i+0) + (j+2)*w];
@@ -117,8 +116,8 @@ static bool compute_mauricio(float *x, int w, int h)
 		(sat_percent < global_mauricio_Sth);
 }
 
-// process one frame
-static void process_tacu(float *out, float *in, int w, int h, int pd)
+// process one (float rgb) frame
+static void process_tacu(float *out, float *in, int w, int h)
 {
 	double framerate = seconds();
 
@@ -207,7 +206,7 @@ static void process_tacu(float *out, float *in, int w, int h, int pd)
 			double dline[3] = {line[0], line[1], line[2]};
 			double rectangle[4] = {0, 0, w, h};
 			double segment[4];
-			bool r = cut_line_with_rectangle(segment, segment+2,
+			cut_line_with_rectangle(segment, segment+2,
 					dline, rectangle, rectangle+2);
 			int ifrom[2] = {round(segment[0]), round(segment[1])};
 			int ito[2] = {round(segment[2]), round(segment[3])};
@@ -263,10 +262,9 @@ int main( int argc, char *argv[] )
 	int cam_id = atoi(argv[1]);
 
 	global_font = *xfont_8x13;
-	global_font = reformat_font(global_font, UNPACKED);
+	global_font = uncompress_font(global_font);
 
 	CvCapture *capture = 0;
-	int accum_index = 0;
 	int       key = 0;
 
 	/* initialize camera */
@@ -333,7 +331,7 @@ int main( int argc, char *argv[] )
 			taccu_in[((j+64)*512+i)*pd+l] = (float)(unsigned char)
 				frame->imageData[((j+48)*w+i+64)*pd+l];
 
-		process_tacu(taccu_out, taccu_in, W, H, pd);
+		process_tacu(taccu_out, taccu_in, W, H);
 
 		taccu_out[0]=taccu_out[1]=taccu_out[2]=0;
 		taccu_out[3]=taccu_out[4]=taccu_out[5]=255;
