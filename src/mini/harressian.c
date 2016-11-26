@@ -59,6 +59,43 @@ static void zoom_out_by_factor_two(float *out, int ow, int oh,
 	}
 }
 
+#define MAX_LEVELS 20
+struct gray_image_pyramid {
+	int n;                // number of levels
+	int w[MAX_LEVELS];    // width of each level
+	int h[MAX_LEVELS];    // height of each level
+	float *x[MAX_LEVELS]; // data of each level
+};
+
+static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
+{
+	int i = 0;
+	p->w[i] = w;
+	p->h[i] = h;
+	p->x[i] = xmalloc(w * h * sizeof*x);
+	poor_man_gaussian_filter(p->x[i], x, w, h, 1);
+	while (1) {
+		i += 1;
+		if (i + 1 >= MAX_LEVELS) break;
+		p->w[i] = ceil(p->w[i-1]/2);
+		p->h[i] = ceil(p->h[i-1]/2);
+		if (p->w[i] <= 1 && p->h[i] <= 1) break;
+		p->x[i] = xmalloc(p->w[i] * p->h[i] * sizeof*x);
+		float *tmp = xmalloc(p->w[i-1] * p->h[i-1] * sizeof*x);
+		poor_man_gaussian_filter(tmp, p->x[i-1],p->w[i-1],p->h[i-1], 2.81);
+		zoom_out_by_factor_two(p->x[i], p->w[i], p->h[i],
+			       	tmp, p->w[i-1], p->h[i-1]);
+		free(tmp);
+	}
+	p->n = i;
+}
+
+static void free_pyramid(struct gray_image_pyramid *p)
+{
+	for (int i = 0; i < p->n; i++)
+		free(p->x[i]);
+}
+
 //int alloc_poor_man_multiscale(float **px, int (*wh)[2], float *x, int w, int h)
 //{
 //	if (w == 1 && h == 1) {
@@ -79,15 +116,9 @@ static void zoom_out_by_factor_two(float *out, int ow, int oh,
 //		free(px[i]);
 //}
 
-int harris(float *out_xy, int max_npoints,
-		float *x, int w, int h, float sigma, float kappa, float tau,
-		float *outopt)
+int harressian_nogauss(float *out_xy, int max_npoints,
+		float *x, int w, int h, float kappa, float tau)
 {
-	float *sx = xmalloc(w * h * sizeof*sx);
-	poor_man_gaussian_filter(sx, x, w, h, sigma);
-	//poor_man_gaussian_filter(x, sx, w, h, sigma);
-	//poor_man_gaussian_filter(sx, x, w, h, sigma);
-
 	int n = 0;
 	for (int j = 1; j < h - 1; j++)
 	for (int i = 1; i < w - 1; i++)
@@ -95,15 +126,15 @@ int harris(float *out_xy, int max_npoints,
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
 		// Vmp V0p Vpp
-		float Vmm = sx[(i-1) + (j-1)*w];
-		float V0m = sx[(i+0) + (j-1)*w];
-		float Vpm = sx[(i+1) + (j-1)*w];
-		float Vm0 = sx[(i-1) + (j+0)*w];
-		float V00 = sx[(i+0) + (j+0)*w];
-		float Vp0 = sx[(i+1) + (j+0)*w];
-		float Vmp = sx[(i-1) + (j+1)*w];
-		float V0p = sx[(i+0) + (j+1)*w];
-		float Vpp = sx[(i+1) + (j+1)*w];
+		float Vmm = x[(i-1) + (j-1)*w];
+		float V0m = x[(i+0) + (j-1)*w];
+		float Vpm = x[(i+1) + (j-1)*w];
+		float Vm0 = x[(i-1) + (j+0)*w];
+		float V00 = x[(i+0) + (j+0)*w];
+		float Vp0 = x[(i+1) + (j+0)*w];
+		float Vmp = x[(i-1) + (j+1)*w];
+		float V0p = x[(i+0) + (j+1)*w];
+		float Vpp = x[(i+1) + (j+1)*w];
 		if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
 				|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
 			continue;
@@ -129,6 +160,66 @@ int harris(float *out_xy, int max_npoints,
 			goto done;
 	}
 done:	assert(n <= max_npoints);
+	return n;
+}
+
+int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
+		float sigma, float kappa, float tau)
+{
+	// filter input image
+	float *sx = xmalloc(w * h * sizeof*sx);
+	poor_man_gaussian_filter(sx, x, w, h, sigma);
+
+	// create image pyramid
+	struct gray_image_pyramid p[1];
+	fill_pyramid(p, sx, w, h);
+	float *tab_xy = xmalloc(2 * max_npoints * sizeof*tab_xy);
+
+	// apply nongaussian harressian at each level of the pyramid
+	int n = 0;
+	int top_level = p->n - 1;
+	//if (top_level > 9) top_level = 9;
+	for (int l = top_level - 1; l >= 0; l--)
+	{
+		int n_l = harressian_nogauss(tab_xy, max_npoints - n,
+				p->x[l], p->w[l], p->h[l], kappa, tau);
+		float factor = 1 << l;
+		float radius = 1 << (l + 1);
+		for (int i = 0; i < n_l; i++)
+		{
+			out_xys[3*n+0] = factor * (tab_xy[2*i+0] + 0.48);
+			out_xys[3*n+1] = factor * (tab_xy[2*i+1]);
+			out_xys[3*n+2] = radius;
+			n += 1;
+		}
+	}
+	assert(n <= max_npoints);
+
+	// cleanup and exit
+	free(tab_xy);
+	free_pyramid(p);
+	free(sx);
+	return n;
+}
+
+int harressian(float *out_xy, int max_npoints,
+		float *x, int w, int h, float sigma, float kappa, float tau,
+		float *outopt)
+{
+	float *sx = xmalloc(w * h * sizeof*sx);
+	poor_man_gaussian_filter(sx, x, w, h, sigma);
+	//poor_man_gaussian_filter(x, sx, w, h, sigma);
+	//poor_man_gaussian_filter(sx, x, w, h, sigma);
+	struct gray_image_pyramid pyr[1];
+	fill_pyramid(pyr, sx, w, h);
+
+	int n = harressian_nogauss(out_xy, max_npoints,
+			pyr->x[1], pyr->w[1], pyr->h[1],
+			kappa, tau);
+	for (int i = 0; i < 2*n; i++)
+		out_xy[i] *= 2;
+
+
 	if (false && outopt) // this is just for debugging purposes
 	            // all the code below must be removed
 	{
@@ -156,34 +247,9 @@ done:	assert(n <= max_npoints);
 			float D = dxx * dyy - dxy * dyx;
 			float R0 = D - kappa * T * T;
 			outopt[j*w+i] = 255 - fmin(254,8*fmax(0,R0));
-			//if (
-			//   V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
-			//	//|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00
-			//	)
-			//	outopt[j*w+i] = 0;
-			//else
-			//	outopt[j*w+i] = 255;
 		}
-		//{
-		//	outopt[j*w+i] = x[j*w+i];
-		//	//float Vmm = x[(i-1) + (j-1)*w];
-		//	//float V0m = x[(i+0) + (j-1)*w];
-		//	//float Vpm = x[(i+1) + (j-1)*w];
-		//	//float Vm0 = x[(i-1) + (j+0)*w];
-		//	//float V00 = x[(i+0) + (j+0)*w];
-		//	//float Vp0 = x[(i+1) + (j+0)*w];
-		//	//float Vmp = x[(i-1) + (j+1)*w];
-		//	//float V0p = x[(i+0) + (j+1)*w];
-		//	//float Vpp = x[(i+1) + (j+1)*w];
-		//	//if (//i % 10 == 0
-		//	//   V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
-		//	//	|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00
-		//	//	)
-		//	//	outopt[j*w+i] = x[j*w+i];
-		//	//else
-		//	//	outopt[j*w+i] = x[j*w+i];
-		//}
 	}
 	free(sx);
+	free_pyramid(pyr);
 	return n;
 }

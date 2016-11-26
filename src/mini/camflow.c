@@ -117,6 +117,50 @@ static bool compute_mauricio(float *x, int w, int h)
 		(sat_percent < global_mauricio_Sth);
 }
 
+static void overlay_rectangle_rgb(float *out, int w, int h,
+		int ax, int ay, int bx, int by, int c1, int c2, int c3)
+{
+	if (bx < ax) bx = ax;
+	if (by < ay) by = ay;
+	assert(ax <= bx);
+	assert(ay <= by);
+	int i, j;
+	for (i = ax; i <= bx; i++)
+	{
+		j = ay;
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+		j = by;
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+	}
+	for (j = ay; j <= by; j++)
+	{
+		i = ax;
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+		i = bx;
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+	}
+}
+
 // process one (float rgb) frame
 static void process_tacu(float *out, float *in, int w, int h)
 {
@@ -140,12 +184,12 @@ static void process_tacu(float *out, float *in, int w, int h)
 
 	// computi harris-hessian
 	int max_keypoints = 2000;
-	float point[2*max_keypoints];
+	float point[3*max_keypoints];
 	double tic = seconds();
-	int npoints = harris(point, max_keypoints, gray, w, h,
+	int npoints = harressian_ms(point, max_keypoints, gray, w, h,
 			global_harris_sigma,
 			global_harris_k,
-			global_harris_flat_th, gray);
+			global_harris_flat_th);
 	fprintf(stderr, "npoints = %d\n", npoints);
 	tic = seconds() - tic;
 	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
@@ -161,74 +205,59 @@ static void process_tacu(float *out, float *in, int w, int h)
 		out[3*idx+2] = gray[idx];
 	}
 
-	// plot detected keypoints
-	int n[][2] = {
-		{0,0},
-	       	{-1,0}, {0,-1}, {0,1}, {1,0}, // 5
-		{-1,-1}, {-1,+1}, {1,-1}, {1,+1}, // 9
-		{-2,0}, {2,0}, {0,-2}, {0,2}, // 13
-		{-2,-1}, {2,-1}, {-1,-2}, {-1,2},
-		{-2,1}, {2,1}, {1,-2}, {1,2} // 21
-	}, nn = 21;
-
 	for (int i = 0; i < npoints; i++)
 	{
-		int x = point[2*i+0];
-		int y = point[2*i+1];
-		for (int p = 0; p < nn; p++)
-		{
-			int xx = x + n[p][0];
-			int yy = y + n[p][1];
-			int idx = yy*w + xx;
-			if (idx < 0 || idx >= w*h) continue;
-			out[3*idx + 0] = 0;
-			out[3*idx + 1] = p?255:0;
-			out[3*idx + 2] = p?0:255;
-		}
+		int x = point[3*i+0];
+		int y = point[3*i+1];
+		int radius = 0.5*point[3*i+2];
+		overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
+				x+radius, y+radius, 0, 255, 0);
+		overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
+				x+radius-1, y+radius-1, 0, 0, 255);
 	}
 
-	// compute ransac
-	if (npoints > 1)
-	{
-		// data for ransac
-		int n = npoints;
-		bool *mask = xmalloc(n * sizeof*mask);
+	//// compute ransac
+	//if (npoints > 1)
+	//{
+	//	// data for ransac
+	//	int n = npoints;
+	//	bool *mask = xmalloc(n * sizeof*mask);
 
-		for (int i = 0; i < 10; i++)
-		{
-			// find line
-			float line[3];
-			int n_inliers = find_straight_line_by_ransac(mask, line,
-					point, n,
-					global_ransac_ntrials,
-					global_ransac_maxerr);
-			if (n_inliers < global_ransac_minliers)
-				break;
-			double dline[3] = {line[0], line[1], line[2]};
-			double rectangle[4] = {0, 0, w, h};
-			double segment[4];
-			cut_line_with_rectangle(segment, segment+2,
-					dline, rectangle, rectangle+2);
-			int ifrom[2] = {round(segment[0]), round(segment[1])};
-			int ito[2] = {round(segment[2]), round(segment[3])};
-			float fred[3] = {0, 0, 255};
-			draw_segment_frgb(out, w, h, ifrom, ito, fred);
-			// exclude the points of this segment
-			int cx = 0;
-			for (int i = 0; i < n; i++)
-				if (!mask[i]) // keep only the unused points
-				{
-					point[2*cx+0] = point[2*i+0];
-					point[2*cx+1] = point[2*i+1];
-					cx++;
-				}
-			assert(cx + n_inliers == n);
-			n = cx;
-		}
+	//	for (int i = 0; i < 10; i++)
+	//	{
+	//		// find line
+	//		float line[3];
+	//		int n_inliers = find_straight_line_by_ransac(mask, line,
+	//				point, n,
+	//				global_ransac_ntrials,
+	//				global_ransac_maxerr);
+	//		if (n_inliers < global_ransac_minliers)
+	//			break;
+	//		double dline[3] = {line[0], line[1], line[2]};
+	//		double rectangle[4] = {0, 0, w, h};
+	//		double segment[4];
+	//		cut_line_with_rectangle(segment, segment+2,
+	//				dline, rectangle, rectangle+2);
+	//		int ifrom[2] = {round(segment[0]), round(segment[1])};
+	//		int ito[2] = {round(segment[2]), round(segment[3])};
+	//		float fred[3] = {0, 0, 255};
+	//		draw_segment_frgb(out, w, h, ifrom, ito, fred);
+	//		// exclude the points of this segment
+	//		int cx = 0;
+	//		for (int i = 0; i < n; i++)
+	//			if (!mask[i]) // keep only the unused points
+	//			{
+	//				point[2*cx+0] = point[2*i+0];
+	//				point[2*cx+1] = point[2*i+1];
+	//				cx++;
+	//			}
+	//		assert(cx + n_inliers == n);
+	//		n = cx;
+	//	}
 
-		// cleanup
-		free(mask);
-	}
+	//	// cleanup
+	//	free(mask);
+	//}
 
 	free(gray);
 
@@ -255,6 +284,22 @@ static void process_tacu(float *out, float *in, int w, int h)
 	put_string_in_float_image(out,w,h,3, 355,15,
 			mauricio?fg:red, 0, &global_font, buf);
 }
+
+#ifdef ENABLE_SCREENSHOTS
+#include <sys/types.h>
+#include <unistd.h>
+#include <iio.h>
+static void save_screenshot(float *x, int w, int h)
+{
+	static int idx = 0;
+	int pid = getpid();
+	char fname[FILENAME_MAX];
+	snprintf(fname, FILENAME_MAX, "/tmp/camflow_shot_%d_%d.png", pid, idx);
+	fprintf(stderr, "saving screenshot on file %s\n", fname);
+	iio_save_image_float_vec(fname, x, w, h, 3);
+	idx += 1;
+}
+#endif
 
 int main( int argc, char *argv[] )
 {
@@ -360,6 +405,9 @@ int main( int argc, char *argv[] )
 		if (key == 'i' && global_ransac_minliers > 2)
 			global_ransac_minliers -= 1;
 		if (key == 'I') global_ransac_minliers += 1;
+#ifdef ENABLE_SCREENSHOTS
+		if (key == ',') save_screenshot(taccu_out, W, H);
+#endif
 		if (key == 'e') global_ransac_maxerr /= wheel_factor;
 		if (key == 'E') global_ransac_maxerr *= wheel_factor;
 		if (isalpha(key)) {
