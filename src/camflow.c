@@ -51,7 +51,7 @@ int find_straight_line_by_ransac(bool *out_mask, float line[3],
 }
 
 // process one (float rgb) frame
-static void process_tacu(float *out, float *in, int w, int h)
+static void process_frgb_frame(float *out, float *in, int w, int h)
 {
 	double framerate = seconds();
 
@@ -243,13 +243,13 @@ int main( int argc, char *argv[] )
 	//IplImage *frame_big = cvCreateImage(size, depth, pd);
 	//fprintf(stderr, "%dx%d %d [%d]\n", frame_big->width, frame_big->height, pd, depth);
 
-	float *taccu_in = xmalloc(W*H*pd*sizeof*taccu_in);
-	float *taccu_out = xmalloc(W*H*pd*sizeof*taccu_in);
+	float *frgb_in = xmalloc(W*H*pd*sizeof*frgb_in);
+	float *frgb_out = xmalloc(W*H*pd*sizeof*frgb_in);
 	for (int i = 0; i < W*H; i++) {
 		int g = 0;//rand()%0x100;
-		taccu_in[3*i+0] = g;
-		taccu_in[3*i+1] = g;
-		taccu_in[3*i+2] = g;
+		frgb_in[3*i+0] = g;
+		frgb_in[3*i+1] = g;
+		frgb_in[3*i+2] = g;
 	}
 
 	/* create a window for the video */
@@ -272,16 +272,16 @@ int main( int argc, char *argv[] )
 		for (int j = 0; j < 384; j++)
 		for (int i = 0; i < 512; i++)
 		for (int l = 0; l < pd; l++)
-			taccu_in[((j+64)*512+i)*pd+l] = (float)(unsigned char)
+			frgb_in[((j+64)*512+i)*pd+l] = (float)(unsigned char)
 				frame->imageData[((j+48)*w+i+64)*pd+l];
 
-		process_tacu(taccu_out, taccu_in, W, H);
+		process_frgb_frame(frgb_out, frgb_in, W, H);
 
-		taccu_out[0]=taccu_out[1]=taccu_out[2]=0;
-		taccu_out[3]=taccu_out[4]=taccu_out[5]=255;
+		frgb_out[0]=frgb_out[1]=frgb_out[2]=0;
+		frgb_out[3]=frgb_out[4]=frgb_out[5]=255;
 
 		for (int i = 0; i < W * H * pd; i++)
-			frame_small->imageData[i] = taccu_out[i];
+			frame_small->imageData[i] = frgb_out[i];
 
 		cvShowImage( "result", frame_small );
 
@@ -304,7 +304,7 @@ int main( int argc, char *argv[] )
 			global_ransac_minliers -= 1;
 		if (key == 'I') global_ransac_minliers += 1;
 #ifdef ENABLE_SCREENSHOTS
-		if (key == ',') save_screenshot(taccu_out, W, H);
+		if (key == ',') save_screenshot(frgb_out, W, H);
 #endif
 		if (key == 'e') global_ransac_maxerr /= wheel_factor;
 		if (key == 'E') global_ransac_maxerr *= wheel_factor;

@@ -69,6 +69,8 @@ struct gray_image_pyramid {
 
 static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 {
+	float S = 2.8; // magic value! do not change
+
 	int i = 0;
 	p->w[i] = w;
 	p->h[i] = h;
@@ -82,7 +84,7 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 		if (p->w[i] <= 1 && p->h[i] <= 1) break;
 		p->x[i] = xmalloc(p->w[i] * p->h[i] * sizeof*x);
 		float *tmp = xmalloc(p->w[i-1] * p->h[i-1] * sizeof*x);
-		poor_man_gaussian_filter(tmp, p->x[i-1],p->w[i-1],p->h[i-1], 2.81);
+		poor_man_gaussian_filter(tmp, p->x[i-1],p->w[i-1],p->h[i-1], S);
 		zoom_out_by_factor_two(p->x[i], p->w[i], p->h[i],
 			       	tmp, p->w[i-1], p->h[i-1]);
 		free(tmp);
@@ -171,8 +173,8 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 		float factor = 1 << l;
 		for (int i = 0; i < n_l; i++)
 		{
-			out_xys[3*n+0] = factor * (tab_xy[2*i+0] + 0.48);
-			out_xys[3*n+1] = factor * (tab_xy[2*i+1]);
+			out_xys[3*n+0] = factor * (tab_xy[2*i+0] + 0.5);
+			out_xys[3*n+1] = factor * (tab_xy[2*i+1] + 0.5);
 			out_xys[3*n+2] = factor;
 			n += 1;
 		}
