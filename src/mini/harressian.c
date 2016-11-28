@@ -96,26 +96,6 @@ static void free_pyramid(struct gray_image_pyramid *p)
 		free(p->x[i]);
 }
 
-//int alloc_poor_man_multiscale(float **px, int (*wh)[2], float *x, int w, int h)
-//{
-//	if (w == 1 && h == 1) {
-//		*px = NULL;
-//		return 0;
-//	}
-//	int ws = ceil(w/2.0);
-//	int hs = ceil(h/2.0);
-//	float *xs = xmallow(ws * hs * 
-//	float *my_x = *px;
-//	int *my_wh = *wh;
-//
-//}
-//
-//void free_poor_man_multiscale(float **px, int n)
-//{
-//	for (int i = 0; i < n; i++)
-//		free(px[i]);
-//}
-
 int harressian_nogauss(float *out_xy, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
@@ -159,6 +139,7 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 			float alpha_j = (V0p + V0m)/2 - V00;
 			float beta_i  = (Vp0 - Vm0)/2;
 			float beta_j  = (V0p - V0m)/2;
+			out_xy[2*n + 0] = i - 0.5 * beta_i / alpha_i;
 			out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
 			n += 1;
 		}
@@ -202,57 +183,5 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	free(tab_xy);
 	free_pyramid(p);
 	free(sx);
-	return n;
-}
-
-int harressian(float *out_xy, int max_npoints,
-		float *x, int w, int h, float sigma, float kappa, float tau,
-		float *outopt)
-{
-	float *sx = xmalloc(w * h * sizeof*sx);
-	poor_man_gaussian_filter(sx, x, w, h, sigma);
-	//poor_man_gaussian_filter(x, sx, w, h, sigma);
-	//poor_man_gaussian_filter(sx, x, w, h, sigma);
-	struct gray_image_pyramid pyr[1];
-	fill_pyramid(pyr, sx, w, h);
-
-	int n = harressian_nogauss(out_xy, max_npoints,
-			pyr->x[1], pyr->w[1], pyr->h[1],
-			kappa, tau);
-	for (int i = 0; i < 2*n; i++)
-		out_xy[i] *= 2;
-
-
-	if (false && outopt) // this is just for debugging purposes
-	            // all the code below must be removed
-	{
-		for (int i = 0; i < w*h; i++)
-			outopt[i] = 0;//rand()%255;
-		for (int j = 1; j < h - 1; j++)
-		for (int i = 1; i < w - 1; i++)
-		{
-			float Vmm = sx[(i-1) + (j-1)*w];
-			float V0m = sx[(i+0) + (j-1)*w];
-			float Vpm = sx[(i+1) + (j-1)*w];
-			float Vm0 = sx[(i-1) + (j+0)*w];
-			float V00 = sx[(i+0) + (j+0)*w];
-			float Vp0 = sx[(i+1) + (j+0)*w];
-			float Vmp = sx[(i-1) + (j+1)*w];
-			float V0p = sx[(i+0) + (j+1)*w];
-			float Vpp = sx[(i+1) + (j+1)*w];
-			float dxx = Vm0 - 2*V00 + Vp0;
-			float dyy = V0m - 2*V00 + V0p;
-			//float dxy = (Vpp + Vmm - Vpm - Vmp)/4;
-			//float dyx = dxy;
-			float dxy = (2*V00 +Vpm +Vmp -Vm0 -V0m -Vp0 -V0p)/2;
-			float dyx = -(2*V00 +Vmm +Vpp -Vm0 -V0p -Vp0 -V0m)/2;
-			float T = dxx + dyy;
-			float D = dxx * dyy - dxy * dyx;
-			float R0 = D - kappa * T * T;
-			outopt[j*w+i] = 255 - fmin(254,8*fmax(0,R0));
-		}
-	}
-	free(sx);
-	free_pyramid(pyr);
 	return n;
 }

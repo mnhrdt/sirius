@@ -72,7 +72,8 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 
 static bool compute_mauricio(float *x, int w, int h)
 {
-	return false;
+	return false; // mauricio test is provisionnaly disabled by now
+
 	// compute % of saturated pixels
 	double sat_percent = 0;
 	for (int i = 0; i < w*h; i++)
@@ -90,7 +91,7 @@ static bool compute_mauricio(float *x, int w, int h)
 	for (int j = 100; j < h-100; j += 2)
 	for (int i = 100; i < w-100; i += 2)
 	{
-		// sobel neighborhood
+		// extract 3x3 neighborhood
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
 		// Vmp V0p Vpp
@@ -108,8 +109,6 @@ static bool compute_mauricio(float *x, int w, int h)
 		if (fabs(gx) > global_mauricio_gth) num_cx_large += 1;
 		if (fabs(gy) > global_mauricio_gth) num_cy_large += 1;
 	}
-	//fprintf(stderr, "sat_percent, cxlarge, cylarge = %g %d %d\n",
-	//		sat_percent, num_cx_large, num_cy_large);
 
 	return
 		(num_cx_large > global_mauricio_Cth) &&
@@ -117,6 +116,7 @@ static bool compute_mauricio(float *x, int w, int h)
 		(sat_percent < global_mauricio_Sth);
 }
 
+// paint a thin rectangle on a float rgb image
 static void overlay_rectangle_rgb(float *out, int w, int h,
 		int ax, int ay, int bx, int by, int c1, int c2, int c3)
 {
@@ -125,16 +125,16 @@ static void overlay_rectangle_rgb(float *out, int w, int h,
 	assert(ax <= bx);
 	assert(ay <= by);
 	int i, j;
-	for (i = ax; i <= bx; i++)
+	for (i = ax; i <= bx; i++) // horizontal edges
 	{
-		j = ay;
+		j = ay; // top
 		if (insideP(w, h, i, j))
 		{
 			out[3*(j*w+i)+0] = c1;
 			out[3*(j*w+i)+1] = c2;
 			out[3*(j*w+i)+2] = c3;
 		}
-		j = by;
+		j = by; // bottom
 		if (insideP(w, h, i, j))
 		{
 			out[3*(j*w+i)+0] = c1;
@@ -142,16 +142,16 @@ static void overlay_rectangle_rgb(float *out, int w, int h,
 			out[3*(j*w+i)+2] = c3;
 		}
 	}
-	for (j = ay; j <= by; j++)
+	for (j = ay; j <= by; j++) // vertical edges
 	{
-		i = ax;
+		i = ax; // left
 		if (insideP(w, h, i, j))
 		{
 			out[3*(j*w+i)+0] = c1;
 			out[3*(j*w+i)+1] = c2;
 			out[3*(j*w+i)+2] = c3;
 		}
-		i = bx;
+		i = bx; // right
 		if (insideP(w, h, i, j))
 		{
 			out[3*(j*w+i)+0] = c1;
@@ -181,7 +181,6 @@ static void process_tacu(float *out, float *in, int w, int h)
 	// compute mauricio test
 	bool mauricio = compute_mauricio(gray, w, h);
 
-
 	// computi harris-hessian
 	int max_keypoints = 2000;
 	float point[3*max_keypoints];
@@ -205,59 +204,73 @@ static void process_tacu(float *out, float *in, int w, int h)
 		out[3*idx+2] = gray[idx];
 	}
 
+	// interior and exterior color for blob display
+	float cin[3], cou[3];
+	if (global_harris_k > 0) {
+		cin[0] = 0; cin[1] = 255; cin[2] = 0; // green
+		cou[0] = 0; cou[1] = 0; cou[2] = 255; // red
+	} else {
+		cin[0] = 255; cin[1] = 0; cin[2] = 0; // blue
+		cou[0] = 0; cou[1] = 255; cou[2] = 0; // green
+	}
 	for (int i = 0; i < npoints; i++)
 	{
 		int x = point[3*i+0];
 		int y = point[3*i+1];
 		int radius = point[3*i+2];
 		overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
-				x+radius, y+radius, 0, 255, 0);
+				x+radius, y+radius, cin[0], cin[1], cin[2]);
 		overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
-				x+radius-1, y+radius-1, 0, 0, 255);
+				x+radius-1, y+radius-1, cou[0], cou[1], cou[2]);
 	}
 
-	//// compute ransac
-	//if (npoints > 1)
-	//{
-	//	// data for ransac
-	//	int n = npoints;
-	//	bool *mask = xmalloc(n * sizeof*mask);
+	// compute ransac
+	if (npoints > 1)
+	{
+		// data for ransac
+		int n = npoints;
+		bool *mask = xmalloc(n * sizeof*mask);
+		float *keypoints = xmalloc(2 * n * sizeof*keypoints);
+		for (int i = 0; i < n; i++)
+		for (int l = 0; l < 2; l++)
+			keypoints[2*i+l] = point[3*i+l];
 
-	//	for (int i = 0; i < 10; i++)
-	//	{
-	//		// find line
-	//		float line[3];
-	//		int n_inliers = find_straight_line_by_ransac(mask, line,
-	//				point, n,
-	//				global_ransac_ntrials,
-	//				global_ransac_maxerr);
-	//		if (n_inliers < global_ransac_minliers)
-	//			break;
-	//		double dline[3] = {line[0], line[1], line[2]};
-	//		double rectangle[4] = {0, 0, w, h};
-	//		double segment[4];
-	//		cut_line_with_rectangle(segment, segment+2,
-	//				dline, rectangle, rectangle+2);
-	//		int ifrom[2] = {round(segment[0]), round(segment[1])};
-	//		int ito[2] = {round(segment[2]), round(segment[3])};
-	//		float fred[3] = {0, 0, 255};
-	//		draw_segment_frgb(out, w, h, ifrom, ito, fred);
-	//		// exclude the points of this segment
-	//		int cx = 0;
-	//		for (int i = 0; i < n; i++)
-	//			if (!mask[i]) // keep only the unused points
-	//			{
-	//				point[2*cx+0] = point[2*i+0];
-	//				point[2*cx+1] = point[2*i+1];
-	//				cx++;
-	//			}
-	//		assert(cx + n_inliers == n);
-	//		n = cx;
-	//	}
+		for (int i = 0; i < 10; i++)
+		{
+			// find line
+			float line[3];
+			int n_inliers = find_straight_line_by_ransac(mask, line,
+					keypoints, n,
+					global_ransac_ntrials,
+					global_ransac_maxerr);
+			if (n_inliers < global_ransac_minliers)
+				break;
+			double dline[3] = {line[0], line[1], line[2]};
+			double rectangle[4] = {0, 0, w, h};
+			double segment[4];
+			cut_line_with_rectangle(segment, segment+2,
+					dline, rectangle, rectangle+2);
+			int ifrom[2] = {round(segment[0]), round(segment[1])};
+			int ito[2] = {round(segment[2]), round(segment[3])};
+			float fred[3] = {0, 0, 255};
+			draw_segment_frgb(out, w, h, ifrom, ito, fred);
+			// exclude the points of this segment
+			int cx = 0;
+			for (int i = 0; i < n; i++)
+				if (!mask[i]) // keep only the unused points
+				{
+					keypoints[2*cx+0] = keypoints[2*i+0];
+					keypoints[2*cx+1] = keypoints[2*i+1];
+					cx++;
+				}
+			assert(cx + n_inliers == n);
+			n = cx;
+		}
 
-	//	// cleanup
-	//	free(mask);
-	//}
+		// cleanup
+		free(keypoints);
+		free(mask);
+	}
 
 	free(gray);
 
@@ -280,9 +293,9 @@ static void process_tacu(float *out, float *in, int w, int h)
 	framerate = seconds() - framerate;
 	snprintf(buf, 1000, "%g Hz", 1/framerate);
 	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
-	snprintf(buf, 1000, "mauricio: %s", mauricio?"sharp":"blurred");
+	//snprintf(buf, 1000, "mauricio: %s", mauricio?"sharp":"blurred");
 	put_string_in_float_image(out,w,h,3, 355,15,
-			mauricio?fg:red, 0, &global_font, buf);
+			mauricio?fg:red, 0, &global_font, "mauricio:disabled");
 }
 
 #ifdef ENABLE_SCREENSHOTS
