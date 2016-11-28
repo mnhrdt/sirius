@@ -77,17 +77,6 @@ static bool cut_line_with_rectangle(double out_a[2], double out_b[2],
 	return false;
 }
 
-static void cut_two_lines(double out_p[2], double l[3], double m[3])
-{
-	// compute crossing point in projective coordinates
-	double p[3];
-	vector_product(p, l, m);
-
-	// recover affine coordinates
-	out_p[0] = p[0] / p[2];
-	out_p[1] = p[1] / p[2];
-}
-
 static int insideP(int w, int h, int i, int j)
 {
 	return i >= 0 && j >= 0 && i < w && j < h;
@@ -117,6 +106,7 @@ void traverse_segment(int px, int py, int qx, int qy,
 // instance of "ransac_error_evaluation_function"
 float distance_of_point_to_straight_line(float *line, float *point, void *usr)
 {
+	(void)usr;
 	float n = hypot(line[0], line[1]);
 	float a = line[0]/n;
 	float b = line[1]/n;
@@ -131,6 +121,7 @@ float distance_of_point_to_straight_line(float *line, float *point, void *usr)
 // instance of "ransac_model_generating_function"
 int straight_line_through_two_points(float *line, float *points, void *usr)
 {
+	(void)usr;
 	float ax = points[0];
 	float ay = points[1];
 	float bx = points[2];
