@@ -119,6 +119,8 @@ static void free_pyramid(struct gray_image_pyramid *p)
 int harressian_nogauss(float *out_xy, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
+	float sign = kappa > 0 ? 1 : -1;
+	kappa = fabs(kappa);
 	int n = 0;
 	for (int j = 1; j < h - 1; j++)
 	for (int i = 1; i < w - 1; i++)
@@ -126,15 +128,15 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
 		// Vmp V0p Vpp
-		float Vmm = x[(i-1) + (j-1)*w];
-		float V0m = x[(i+0) + (j-1)*w];
-		float Vpm = x[(i+1) + (j-1)*w];
-		float Vm0 = x[(i-1) + (j+0)*w];
-		float V00 = x[(i+0) + (j+0)*w];
-		float Vp0 = x[(i+1) + (j+0)*w];
-		float Vmp = x[(i-1) + (j+1)*w];
-		float V0p = x[(i+0) + (j+1)*w];
-		float Vpp = x[(i+1) + (j+1)*w];
+		float Vmm = sign * x[(i-1) + (j-1)*w];
+		float V0m = sign * x[(i+0) + (j-1)*w];
+		float Vpm = sign * x[(i+1) + (j-1)*w];
+		float Vm0 = sign * x[(i-1) + (j+0)*w];
+		float V00 = sign * x[(i+0) + (j+0)*w];
+		float Vp0 = sign * x[(i+1) + (j+0)*w];
+		float Vmp = sign * x[(i-1) + (j+1)*w];
+		float V0p = sign * x[(i+0) + (j+1)*w];
+		float Vpp = sign * x[(i+1) + (j+1)*w];
 		if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
 				|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
 			continue;
@@ -145,15 +147,19 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 		//float dxy =  (2*V00 +Vpm +Vmp -Vm0 -V0m -Vp0 -V0p)/2;
 		//float dyx = -(2*V00 +Vmm +Vpp -Vm0 -V0p -Vp0 -V0m)/2;
 		//
-		// NOTE XXX TODO : this scheme for dxy has directional aliasing!
+		// XXX TODO : these schemes for dxy have directional aliasing!
 		//
 		float T = dxx + dyy;
 		float D = dxx * dyy - dxy * dyx;
 		float R0 = D - kappa * T * T;
 		if (T > tau && R0 > 0)
 		{
-			out_xy[2*n + 0] = i;
-			out_xy[2*n + 1] = j;
+			// TODO: higher-order sub-pixel localisation
+			float alpha_i = (Vp0 + Vm0)/2 - V00;
+			float alpha_j = (V0p + V0m)/2 - V00;
+			float beta_i  = (Vp0 - Vm0)/2;
+			float beta_j  = (V0p - V0m)/2;
+			out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
 			n += 1;
 		}
 		if (n >= max_npoints)
@@ -177,19 +183,16 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 
 	// apply nongaussian harressian at each level of the pyramid
 	int n = 0;
-	int top_level = p->n - 1;
-	//if (top_level > 9) top_level = 9;
-	for (int l = top_level - 1; l >= 0; l--)
+	for (int l = p->n - 1; l >= 0; l--)
 	{
 		int n_l = harressian_nogauss(tab_xy, max_npoints - n,
 				p->x[l], p->w[l], p->h[l], kappa, tau);
 		float factor = 1 << l;
-		float radius = 1 << (l + 1);
 		for (int i = 0; i < n_l; i++)
 		{
 			out_xys[3*n+0] = factor * (tab_xy[2*i+0] + 0.48);
 			out_xys[3*n+1] = factor * (tab_xy[2*i+1]);
-			out_xys[3*n+2] = radius;
+			out_xys[3*n+2] = factor;
 			n += 1;
 		}
 	}

@@ -209,7 +209,7 @@ static void process_tacu(float *out, float *in, int w, int h)
 	{
 		int x = point[3*i+0];
 		int y = point[3*i+1];
-		int radius = 0.5*point[3*i+2];
+		int radius = point[3*i+2];
 		overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
 				x+radius, y+radius, 0, 255, 0);
 		overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
@@ -410,6 +410,7 @@ int main( int argc, char *argv[] )
 #endif
 		if (key == 'e') global_ransac_maxerr /= wheel_factor;
 		if (key == 'E') global_ransac_maxerr *= wheel_factor;
+		if (key == 'w') global_harris_k *= -1;
 		if (isalpha(key)) {
 			printf("harris_sigma = %g\n", global_harris_sigma);
 			printf("harris_k = %g\n", global_harris_k);
