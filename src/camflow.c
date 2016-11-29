@@ -38,7 +38,7 @@ double global_mauricio_Sth = 20.0;
 #include "mauricio.c"         // function to compute Mauricio's blur detection
 
 
-int find_straight_line_by_ransac(bool *out_mask, float line[3],
+int find_straight_line_by_ransac(int *out_mask, float line[3],
 		float *points, int npoints,
 		int ntrials, float max_err)
 {
@@ -56,7 +56,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	double framerate = seconds();
 
 	// convert image to gray (and put it into rafa's image structure)
-	float *gray = xmalloc(w*h*sizeof*gray);
+	float *gray = xmalloc_float(w*h);
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
 	{
@@ -104,13 +104,15 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	}
 	for (int i = 0; i < npoints; i++)
 	{
-		int x = point[3*i+0];
-		int y = point[3*i+1];
-		int radius = point[3*i+2];
-		overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
-				x+radius, y+radius, cin[0], cin[1], cin[2]);
-		overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
-				x+radius-1, y+radius-1, cou[0], cou[1], cou[2]);
+		float x = point[3*i+0];
+		float y = point[3*i+1];
+		float radius = sqrt(2)*point[3*i+2];
+		//overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
+		//		x+radius, y+radius, cin[0], cin[1], cin[2]);
+		//overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
+		//		x+radius-1, y+radius-1, cou[0], cou[1], cou[2]);
+		overlay_circle_rgb(out,w,h, x,y,radius+0, cin[0],cin[1],cin[2]);
+		overlay_circle_rgb(out,w,h, x,y,radius+1, cou[0],cou[1],cou[2]);
 	}
 
 	// compute ransac
@@ -118,8 +120,8 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	{
 		// data for ransac
 		int n = npoints;
-		bool *mask = xmalloc(n * sizeof*mask);
-		float *keypoints = xmalloc(2 * n * sizeof*keypoints);
+		int *mask = xmalloc_int(n);
+		float *keypoints = xmalloc_float(2 * n);
 		for (int i = 0; i < n; i++)
 		for (int l = 0; l < 2; l++)
 			keypoints[2*i+l] = point[3*i+l];
@@ -243,8 +245,8 @@ int main( int argc, char *argv[] )
 	//IplImage *frame_big = cvCreateImage(size, depth, pd);
 	//fprintf(stderr, "%dx%d %d [%d]\n", frame_big->width, frame_big->height, pd, depth);
 
-	float *frgb_in = xmalloc(W*H*pd*sizeof*frgb_in);
-	float *frgb_out = xmalloc(W*H*pd*sizeof*frgb_in);
+	float *frgb_in = xmalloc_float(W*H*pd);
+	float *frgb_out = xmalloc_float(W*H*pd);
 	for (int i = 0; i < W*H; i++) {
 		int g = 0;//rand()%0x100;
 		frgb_in[3*i+0] = g;

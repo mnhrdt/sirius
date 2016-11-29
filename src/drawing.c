@@ -8,7 +8,7 @@ struct drawing_state {
 
 static void plot_frgb_pixel(int i, int j, void *ee)
 {
-	struct drawing_state *e = ee;
+	struct drawing_state *e = (struct drawing_state *)ee;
 	if (!insideP(e->w, e->h, i, j))
 		return;
 	e->frgb[3*(j * e->w + i) + 0] = e->color[0];
@@ -19,8 +19,13 @@ static void plot_frgb_pixel(int i, int j, void *ee)
 static void draw_segment_frgb(float *frgb, int w, int h,
 		int from[2], int to[2], float color[3])
 {
-	struct drawing_state e = {.w = w, .h = h, .frgb = frgb, .color = color};
-	traverse_segment(from[0], from[1], to[0], to[1], plot_frgb_pixel, &e);
+	struct drawing_state e;
+	void *ee = (void*)&e;
+	e.w = w;
+	e.h = h;
+	e.frgb = frgb;
+	e.color = color;
+	traverse_segment(from[0], from[1], to[0], to[1], plot_frgb_pixel, ee);
 }
 
 
@@ -69,3 +74,51 @@ static void overlay_rectangle_rgb(float *out, int w, int h,
 	}
 }
 
+static void putcolor_frgb(float *x, int w, int h, int i, int j,
+		float c1, float c2, float c3)
+{
+	if (insideP(w, h, i, j))
+	{
+		x[3*(j*w+i)+0] = c1;
+		x[3*(j*w+i)+1] = c2;
+		x[3*(j*w+i)+2] = c3;
+	}
+}
+
+// paint a thin rectangle on a float rgb image
+static void overlay_circle_rgb(float *out, int w, int h,
+		float cx, float cy, float r, int c1, int c2, int c3)
+{
+	// top arc
+	for (int i = round(cx - r/sqrt(2)); i <= round(cx + r/sqrt(2)); i++)
+	{
+		float x = i + (cx-r/sqrt(2))-round(cx-r/sqrt(2));
+		float y = cy + sqrt(r*r - (x - cx)*(x - cx));
+		int j = round(y);
+		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+	}
+	// bottom arc
+	for (int i = round(cx - r/sqrt(2)); i <= round(cx + r/sqrt(2)); i++)
+	{
+		float x = i + (cx-r/sqrt(2))-round(cx-r/sqrt(2));
+		float y = cy - sqrt(r*r - (x - cx)*(x - cx));
+		int j = round(y);
+		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+	}
+	// right arc
+	for (int j = round(cy - r/sqrt(2)); j <= round(cy + r/sqrt(2)); j++)
+	{
+		float y = j + (cy-r/sqrt(2))-round(cy-r/sqrt(2));
+		float x = cx + sqrt(r*r - (y - cy)*(y - cy));
+		int i = round(x);
+		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+	}
+	// left arc
+	for (int j = round(cy - r/sqrt(2)); j <= round(cy + r/sqrt(2)); j++)
+	{
+		float y = j + (cy-r/sqrt(2))-round(cy-r/sqrt(2));
+		float x = cx - sqrt(r*r - (y - cy)*(y - cy));
+		int i = round(x);
+		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+	}
+}

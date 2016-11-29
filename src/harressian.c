@@ -74,7 +74,7 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 	int i = 0;
 	p->w[i] = w;
 	p->h[i] = h;
-	p->x[i] = xmalloc(w * h * sizeof*x);
+	p->x[i] = xmalloc_float(w * h);
 	poor_man_gaussian_filter(p->x[i], x, w, h, 1);
 	while (1) {
 		i += 1;
@@ -82,8 +82,8 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 		p->w[i] = ceil(p->w[i-1]/2);
 		p->h[i] = ceil(p->h[i-1]/2);
 		if (p->w[i] <= 1 && p->h[i] <= 1) break;
-		p->x[i] = xmalloc(p->w[i] * p->h[i] * sizeof*x);
-		float *tmp = xmalloc(p->w[i-1] * p->h[i-1] * sizeof*x);
+		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
+		float *tmp = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		poor_man_gaussian_filter(tmp, p->x[i-1],p->w[i-1],p->h[i-1], S);
 		zoom_out_by_factor_two(p->x[i], p->w[i], p->h[i],
 			       	tmp, p->w[i-1], p->h[i-1]);
@@ -156,13 +156,13 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 		float sigma, float kappa, float tau)
 {
 	// filter input image
-	float *sx = xmalloc(w * h * sizeof*sx);
+	float *sx = xmalloc_float(w * h);
 	poor_man_gaussian_filter(sx, x, w, h, sigma);
 
 	// create image pyramid
 	struct gray_image_pyramid p[1];
 	fill_pyramid(p, sx, w, h);
-	float *tab_xy = xmalloc(2 * max_npoints * sizeof*tab_xy);
+	float *tab_xy = xmalloc_float(2 * max_npoints);
 
 	// apply nongaussian harressian at each level of the pyramid
 	int n = 0;

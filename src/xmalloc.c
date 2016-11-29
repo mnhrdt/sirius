@@ -2,6 +2,7 @@
 #define _XMALLOC_C
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "fail.c"
 
@@ -17,31 +18,21 @@ static void *xmalloc(size_t size)
 #endif
 	if (size == 0)
 		fail("xmalloc: zero size");
-	void *new = malloc(size);
-	if (!new)
+	void *now = malloc(size);
+	if (!now)
 	{
 		double sm = size / (0x100000 * 1.0);
 		fail("xmalloc: out of memory when requesting "
 			"%zu bytes (%gMB)",//:\"%s\"",
 			size, sm);//, strerror(errno));
 	}
-	return new;
+	return now;
 }
 
-inline // to avoid unused warnings
-static void *xrealloc(void *p, size_t s)
-{
-	void *r = realloc(p, s);
-	if (!r) fail("realloc failed");
-	return r;
-}
-
-inline // to avoid unused warnings
-static void xfree(void *p)
-{
-	if (!p)
-		fail("thou shalt not free a null pointer!");
-	free(p);
-}
-
+// note: due to C++ brain damage, the following silly functions are necessary
+float *xmalloc_float(int n){return(float*)xmalloc(n*sizeof(float));}
+int *xmalloc_int(int n){return(int*)xmalloc(n*sizeof(int));}
+bool *xmalloc_bool(bool n){return(bool*)xmalloc(n*sizeof(bool));}
+uint8_t *xmalloc_uint8(int n){return(uint8_t*)xmalloc(n*sizeof(uint8_t));}
+uint32_t *xmalloc_uint32(int n){return(uint32_t*)xmalloc(n*sizeof(uint32_t));}
 #endif//_XMALLOC_C

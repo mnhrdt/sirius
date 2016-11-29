@@ -38,7 +38,7 @@ typedef bool (ransac_model_accepting_function)(
 // number of inliers.
 int ransac_trial(
 		// output
-		bool *out_mask,    // array mask identifying the inliers
+		int *out_mask,    // array mask identifying the inliers
 
 		// input data
 		float *data,       // array of input data
@@ -128,7 +128,7 @@ static void fill_random_indices(int *idx, int n, int a, int b)
 int ransac(
 		// output
 		//int *out_ninliers, // number of inliers
-		bool *out_mask,    // array mask identifying the inliers
+		int *out_mask,    // array mask identifying the inliers
 		float *out_model,  // model parameters
 
 		// input data
@@ -155,8 +155,8 @@ int ransac(
 
 	int best_ninliers = 0;
 	float best_model[modeldim];
-	bool *best_mask = xmalloc(n * sizeof*best_mask);
-	bool *tmp_mask = xmalloc(n * sizeof*best_mask);
+	int *best_mask = xmalloc_int(n);
+	int *tmp_mask = xmalloc_int(n);
 
 	for (int i = 0; i < ntrials; i++)
 	{
