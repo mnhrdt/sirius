@@ -23,7 +23,7 @@ struct bitmap_font global_font; // globally visible fixed-width font (for HUD)
 // parameters of the algorithm (global variables, for easy testing)
 
 double global_harris_sigma = 1;    // s
-double global_harris_k = 0.23;     // k
+double global_harris_k = 0.24;     // k
 double global_harris_flat_th = 20; // t
 int    global_harris_neigh = 1;    // n
 
@@ -78,8 +78,16 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 			global_harris_sigma,
 			global_harris_k,
 			global_harris_flat_th);
-	fprintf(stderr, "npoints = %d\n", npoints);
 	tic = seconds() - tic;
+	int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
+	for (int i = 0; i < npoints; i++) {
+		int si = round(log2(point[3*i+2]));
+		if (si < 30) phist[si] += 1;
+	}
+	fprintf(stderr, "npoints = %d:", npoints);
+	for (int i = 0; i < 8; i++)
+		fprintf(stderr, "\t%d", phist[i]);
+	fprintf(stderr, "\n");
 	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
 	//		tic*1000, 1/tic);
 
@@ -292,8 +300,8 @@ int main( int argc, char *argv[] )
 		double wheel_factor = 1.1;
 		if (key == 's') global_harris_sigma /= wheel_factor;
 		if (key == 'S') global_harris_sigma *= wheel_factor;
-		if (key == 'k') global_harris_k /= wheel_factor;
-		if (key == 'K') global_harris_k *= wheel_factor;
+		if (key == 'k') global_harris_k /= pow(wheel_factor,1/32.0);
+		if (key == 'K') global_harris_k *= pow(wheel_factor,1/32.0);
 		if (key == 't') global_harris_flat_th /= wheel_factor;
 		if (key == 'T') global_harris_flat_th *= wheel_factor;
 		if (key == 'n' && global_harris_neigh > 0)

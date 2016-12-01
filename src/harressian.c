@@ -40,7 +40,7 @@ static float getpixel_1(float *I, int w, int h, int i, int j)
 	return I[i+j*w];
 }
 
-static void zoom_out_by_factor_two(float *out, int ow, int oh,
+static void downsample_by_factor_two(float *out, int ow, int oh,
 		float *in, int iw, int ih)
 {
 	if (!out || !in) return;
@@ -49,14 +49,7 @@ static void zoom_out_by_factor_two(float *out, int ow, int oh,
 	assert(abs(2*oh-ih) < 2);
 	for (int j = 0; j < oh; j++)
 	for (int i = 0; i < ow; i++)
-	{
-		float a[4];
-		a[0] = p(in, iw, ih, 2*i, 2*j);
-		a[1] = p(in, iw, ih, 2*i+1, 2*j);
-		a[2] = p(in, iw, ih, 2*i, 2*j+1);
-		a[3] = p(in, iw, ih, 2*i+1, 2*j+1);
-		out[ow*j+i] = (a[0] + a[1] + a[2] + a[3]) / 4;
-	}
+		out[ow*j+i] = p(in, iw, ih, 2*i, 2*j);
 }
 
 #define MAX_LEVELS 20
@@ -69,13 +62,13 @@ struct gray_image_pyramid {
 
 static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 {
-	float S = 2.8; // magic value! do not change
+	float S = 2.8 / 2; // magic value! do not change
 
 	int i = 0;
 	p->w[i] = w;
 	p->h[i] = h;
 	p->x[i] = xmalloc_float(w * h);
-	poor_man_gaussian_filter(p->x[i], x, w, h, 1);
+	memcpy(p->x[i], x, w*h*sizeof*x);
 	while (1) {
 		i += 1;
 		if (i + 1 >= MAX_LEVELS) break;
@@ -85,7 +78,7 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
 		float *tmp = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		poor_man_gaussian_filter(tmp, p->x[i-1],p->w[i-1],p->h[i-1], S);
-		zoom_out_by_factor_two(p->x[i], p->w[i], p->h[i],
+		downsample_by_factor_two(p->x[i], p->w[i], p->h[i],
 			       	tmp, p->w[i-1], p->h[i-1]);
 		free(tmp);
 	}
@@ -104,8 +97,9 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
 	int n = 0;
-	for (int j = 1; j < h - 1; j++)
-	for (int i = 1; i < w - 1; i++)
+//#pragma omp parallel for
+	for (int j = 2; j < h - 2; j++)
+	for (int i = 2; i < w - 2; i++)
 	{
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
@@ -146,9 +140,10 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 			n += 1;
 		}
 		if (n >= max_npoints)
-			goto done;
+			break;
 	}
-done:	assert(n <= max_npoints);
+done:	if(n>max_npoints)fprintf(stderr,"BAD (n=%d, m=%d)\n",n,max_npoints);
+	assert(n <= max_npoints);
 	return n;
 }
 
@@ -173,12 +168,15 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 		float factor = 1 << l;
 		for (int i = 0; i < n_l; i++)
 		{
-			out_xys[3*n+0] = factor * (tab_xy[2*i+0] + 0.5);
-			out_xys[3*n+1] = factor * (tab_xy[2*i+1] + 0.5);
+			if (n >= max_npoints) break;
+			out_xys[3*n+0] = factor * tab_xy[2*i+0];
+			out_xys[3*n+1] = factor * tab_xy[2*i+1];
 			out_xys[3*n+2] = factor;
 			n += 1;
 		}
 	}
+	if (n > max_npoints)
+		fprintf(stderr, "BAD n = %d\n", n);
 	assert(n <= max_npoints);
 
 	// cleanup and exit
