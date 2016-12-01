@@ -97,7 +97,6 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
 	int n = 0;
-//#pragma omp parallel for
 	for (int j = 2; j < h - 2; j++)
 	for (int i = 2; i < w - 2; i++)
 	{
@@ -139,9 +138,10 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 			out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
 			n += 1;
 		}
-		if (n >= max_npoints-2)
-			break;
+		if (n >= max_npoints - 1)
+			goto done;
 	}
+done:
 	assert(n < max_npoints);
 	return n;
 }
@@ -174,8 +174,6 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 			n += 1;
 		}
 	}
-	if (n > max_npoints)
-		fprintf(stderr, "BAD n = %d\n", n);
 	assert(n <= max_npoints);
 
 	// cleanup and exit
