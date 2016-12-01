@@ -139,11 +139,10 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 			out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
 			n += 1;
 		}
-		if (n >= max_npoints)
+		if (n >= max_npoints-2)
 			break;
 	}
-done:	if(n>max_npoints)fprintf(stderr,"BAD (n=%d, m=%d)\n",n,max_npoints);
-	assert(n <= max_npoints);
+	assert(n < max_npoints);
 	return n;
 }
 

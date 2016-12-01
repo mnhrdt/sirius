@@ -29,50 +29,50 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 }
 
 
-// paint a thin rectangle on a float rgb image
-static void overlay_rectangle_rgb(float *out, int w, int h,
-		int ax, int ay, int bx, int by, int c1, int c2, int c3)
-{
-	if (bx < ax) bx = ax;
-	if (by < ay) by = ay;
-	assert(ax <= bx);
-	assert(ay <= by);
-	int i, j;
-	for (i = ax; i <= bx; i++) // horizontal edges
-	{
-		j = ay; // top
-		if (insideP(w, h, i, j))
-		{
-			out[3*(j*w+i)+0] = c1;
-			out[3*(j*w+i)+1] = c2;
-			out[3*(j*w+i)+2] = c3;
-		}
-		j = by; // bottom
-		if (insideP(w, h, i, j))
-		{
-			out[3*(j*w+i)+0] = c1;
-			out[3*(j*w+i)+1] = c2;
-			out[3*(j*w+i)+2] = c3;
-		}
-	}
-	for (j = ay; j <= by; j++) // vertical edges
-	{
-		i = ax; // left
-		if (insideP(w, h, i, j))
-		{
-			out[3*(j*w+i)+0] = c1;
-			out[3*(j*w+i)+1] = c2;
-			out[3*(j*w+i)+2] = c3;
-		}
-		i = bx; // right
-		if (insideP(w, h, i, j))
-		{
-			out[3*(j*w+i)+0] = c1;
-			out[3*(j*w+i)+1] = c2;
-			out[3*(j*w+i)+2] = c3;
-		}
-	}
-}
+//// paint a thin rectangle on a float rgb image
+//static void overlay_rectangle_rgb(float *out, int w, int h,
+//		int ax, int ay, int bx, int by, int c1, int c2, int c3)
+//{
+//	if (bx < ax) bx = ax;
+//	if (by < ay) by = ay;
+//	assert(ax <= bx);
+//	assert(ay <= by);
+//	int i, j;
+//	for (i = ax; i <= bx; i++) // horizontal edges
+//	{
+//		j = ay; // top
+//		if (insideP(w, h, i, j))
+//		{
+//			out[3*(j*w+i)+0] = c1;
+//			out[3*(j*w+i)+1] = c2;
+//			out[3*(j*w+i)+2] = c3;
+//		}
+//		j = by; // bottom
+//		if (insideP(w, h, i, j))
+//		{
+//			out[3*(j*w+i)+0] = c1;
+//			out[3*(j*w+i)+1] = c2;
+//			out[3*(j*w+i)+2] = c3;
+//		}
+//	}
+//	for (j = ay; j <= by; j++) // vertical edges
+//	{
+//		i = ax; // left
+//		if (insideP(w, h, i, j))
+//		{
+//			out[3*(j*w+i)+0] = c1;
+//			out[3*(j*w+i)+1] = c2;
+//			out[3*(j*w+i)+2] = c3;
+//		}
+//		i = bx; // right
+//		if (insideP(w, h, i, j))
+//		{
+//			out[3*(j*w+i)+0] = c1;
+//			out[3*(j*w+i)+1] = c2;
+//			out[3*(j*w+i)+2] = c3;
+//		}
+//	}
+//}
 
 static void putcolor_frgb(float *x, int w, int h, int i, int j,
 		float c1, float c2, float c3)

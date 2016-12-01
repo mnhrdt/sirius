@@ -1,7 +1,7 @@
-CC=gcc-6
+CC="gcc-6 -std=gnu99"
 WFLAGS="-Wall -Wextra -Wno-sign-compare"
 OFLAGS="-O3 -ffast-math -march=native -mtune=native"
-CFLAGS="-std=gnu99 $WFLAGS $OFLAGS"
+CFLAGS="$WFLAGS $OFLAGS"
 OCVFLAGS=`pkg-config opencv --cflags --libs`
 $CC $CFLAGS camflow.c -o camflow $OCVFLAGS -lm
 
