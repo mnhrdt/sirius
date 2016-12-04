@@ -1,0 +1,65 @@
+\documentclass[a4paper]{article}
+
+\title{Simplest Blob Detection}
+\author{EML \& RGvG}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+	We present a simple and fast multi-scale blob detector.
+	The ``blobs'' are defined as well-contrasted local maxima or minima of
+	the image with a round shape.
+	It is a straightforward differential criterion based on the Hessian
+	matrix of the image filtered at different scales, requiring about 18
+	multiplications per pixel.
+	The criteria for the proposed implementation are, in decreasing order
+	of importance: (1) simplicity of the algorithm, (2) minimal
+	computational cost, (3) quality of the result.
+	We believe that our implementation is the shortest possible code that
+	is able to detect white and black blobs of any size in images.
+\end{abstract}
+
+\section{Introduction}
+
+short history of feature detection: edges, points, etc
+
+keypoint detection: corners vs. local extrema vs. centers of blobs
+
+\section{Simplest scale-space}
+
+poor man gaussian filtering
+
+poor man downsampling
+
+construction of the image pyramid
+
+\section{Simplest blob detection at one scale}
+
+criterion in the continuous domain:
+
+1) local minima of the $\sigma$-filtered image
+
+2) such that $u_{xx}+u_{yy} > \tau$ and
+$\frac{u_{xx}u_{yy}-u_{xy}^2}{(u_{xx}+u_{yy})^2}>\kappa$
+
+discretization
+
+poor man gaussian filtering
+
+second derivatives by finite differences at the closest octave
+
+
+\section{Simplest sub-pixel and sub-octave localization}
+
+separable sub-pixel localisation by fitting a parabola on each direction and
+finding its minimum
+
+\section{Experiments and conclusion}
+
+show some results, give some numbers as FPS using a few combinations of
+architecture/video resolution/compiler+options
+
+\end{document}
+
+% vim:set tw=79 spell spelllang=en:
