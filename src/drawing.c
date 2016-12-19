@@ -29,50 +29,50 @@ static void draw_segment_frgb(float *frgb, int w, int h,
 }
 
 
-//// paint a thin rectangle on a float rgb image
-//static void overlay_rectangle_rgb(float *out, int w, int h,
-//		int ax, int ay, int bx, int by, int c1, int c2, int c3)
-//{
-//	if (bx < ax) bx = ax;
-//	if (by < ay) by = ay;
-//	assert(ax <= bx);
-//	assert(ay <= by);
-//	int i, j;
-//	for (i = ax; i <= bx; i++) // horizontal edges
-//	{
-//		j = ay; // top
-//		if (insideP(w, h, i, j))
-//		{
-//			out[3*(j*w+i)+0] = c1;
-//			out[3*(j*w+i)+1] = c2;
-//			out[3*(j*w+i)+2] = c3;
-//		}
-//		j = by; // bottom
-//		if (insideP(w, h, i, j))
-//		{
-//			out[3*(j*w+i)+0] = c1;
-//			out[3*(j*w+i)+1] = c2;
-//			out[3*(j*w+i)+2] = c3;
-//		}
-//	}
-//	for (j = ay; j <= by; j++) // vertical edges
-//	{
-//		i = ax; // left
-//		if (insideP(w, h, i, j))
-//		{
-//			out[3*(j*w+i)+0] = c1;
-//			out[3*(j*w+i)+1] = c2;
-//			out[3*(j*w+i)+2] = c3;
-//		}
-//		i = bx; // right
-//		if (insideP(w, h, i, j))
-//		{
-//			out[3*(j*w+i)+0] = c1;
-//			out[3*(j*w+i)+1] = c2;
-//			out[3*(j*w+i)+2] = c3;
-//		}
-//	}
-//}
+// paint a thin rectangle on a float rgb image
+static void overlay_rectangle_rgb(float *out, int w, int h,
+		int ax, int ay, int bx, int by, int c1, int c2, int c3)
+{
+	if (bx < ax) bx = ax;
+	if (by < ay) by = ay;
+	assert(ax <= bx);
+	assert(ay <= by);
+	int i, j;
+	for (i = ax; i <= bx; i++) // horizontal edges
+	{
+		j = ay; // top
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+		j = by; // bottom
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+	}
+	for (j = ay; j <= by; j++) // vertical edges
+	{
+		i = ax; // left
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+		i = bx; // right
+		if (insideP(w, h, i, j))
+		{
+			out[3*(j*w+i)+0] = c1;
+			out[3*(j*w+i)+1] = c2;
+			out[3*(j*w+i)+2] = c3;
+		}
+	}
+}
 
 static void putcolor_frgb(float *x, int w, int h, int i, int j,
 		float c1, float c2, float c3)
@@ -89,36 +89,22 @@ static void putcolor_frgb(float *x, int w, int h, int i, int j,
 static void overlay_circle_rgb(float *out, int w, int h,
 		float cx, float cy, float r, int c1, int c2, int c3)
 {
-	// top arc
+	// top and bottom arcs
 	for (int i = round(cx - r/sqrt(2)); i <= round(cx + r/sqrt(2)); i++)
 	{
 		float x = i + (cx-r/sqrt(2))-round(cx-r/sqrt(2));
-		float y = cy + sqrt(r*r - (x - cx)*(x - cx));
-		int j = round(y);
-		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+		float ytop = cy + sqrt(r*r - (x - cx)*(x - cx));
+		float ybot = cy - sqrt(r*r - (x - cx)*(x - cx));
+		putcolor_frgb(out, w,h, i, round(ytop), c1,c2,c3);
+		putcolor_frgb(out, w,h, i, round(ybot), c1,c2,c3);
 	}
-	// bottom arc
-	for (int i = round(cx - r/sqrt(2)); i <= round(cx + r/sqrt(2)); i++)
-	{
-		float x = i + (cx-r/sqrt(2))-round(cx-r/sqrt(2));
-		float y = cy - sqrt(r*r - (x - cx)*(x - cx));
-		int j = round(y);
-		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
-	}
-	// right arc
+	// left and right arcs
 	for (int j = round(cy - r/sqrt(2)); j <= round(cy + r/sqrt(2)); j++)
 	{
 		float y = j + (cy-r/sqrt(2))-round(cy-r/sqrt(2));
-		float x = cx + sqrt(r*r - (y - cy)*(y - cy));
-		int i = round(x);
-		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
-	}
-	// left arc
-	for (int j = round(cy - r/sqrt(2)); j <= round(cy + r/sqrt(2)); j++)
-	{
-		float y = j + (cy-r/sqrt(2))-round(cy-r/sqrt(2));
-		float x = cx - sqrt(r*r - (y - cy)*(y - cy));
-		int i = round(x);
-		putcolor_frgb(out, w,h, i,j, c1,c2,c3);
+		float xleft = cx - sqrt(r*r - (y - cy)*(y - cy));
+		float xrite = cx + sqrt(r*r - (y - cy)*(y - cy));
+		putcolor_frgb(out, w, h, round(xleft), j, c1,c2,c3);
+		putcolor_frgb(out, w, h, round(xrite), j, c1,c2,c3);
 	}
 }

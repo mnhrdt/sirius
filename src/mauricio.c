@@ -1,12 +1,13 @@
 
-static bool compute_mauricio(float *x, int w, int h)
+static bool compute_mauricio(float *x, int w, int h,
+		double par_ssat, double par_gth, int par_Cth, double par_Sth)
 {
 	return false; // mauricio test is provisionnaly disabled by now
 
 	// compute % of saturated pixels
 	double sat_percent = 0;
 	for (int i = 0; i < w*h; i++)
-		if (x[i] > global_mauricio_ssat)
+		if (x[i] > par_ssat)
 			sat_percent += 1;
 	sat_percent /= w*h;
 	sat_percent *= 100;
@@ -35,13 +36,13 @@ static bool compute_mauricio(float *x, int w, int h)
 		double Vpp = x[(i+2) + (j+2)*w];
 		double gx = Vpm - Vmm + 2*(Vp0 - Vm0) + Vpp - Vmp;
 		double gy = Vmp - Vmm + 2*(V0p - V0m) + Vpp - Vpm;
-		if (fabs(gx) > global_mauricio_gth) num_cx_large += 1;
-		if (fabs(gy) > global_mauricio_gth) num_cy_large += 1;
+		if (fabs(gx) > par_gth) num_cx_large += 1;
+		if (fabs(gy) > par_gth) num_cy_large += 1;
 	}
 
 	return
-		(num_cx_large > global_mauricio_Cth) &&
-		(num_cy_large > global_mauricio_Cth) &&
-		(sat_percent < global_mauricio_Sth);
+		(num_cx_large > par_Cth) &&
+		(num_cy_large > par_Cth) &&
+		(sat_percent < par_Sth);
 }
 

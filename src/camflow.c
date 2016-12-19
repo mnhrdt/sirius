@@ -7,6 +7,7 @@
 #include "highgui.h"
 
 
+#include "mauricio.c"         // function to compute Mauricio's blur detection
 #include "harressian.c"       // computation of Harris keypoints
 #include "ransac.c"           // generic ransac algorithm
 #include "geometry.c"         // linear algebra and geometric computations
@@ -14,17 +15,20 @@
 #include "fontu.c"            // bitmap font library
 #include "seconds.c"          // function for computing running times
 #include "xmalloc.c"          // retargetable malloc
-
 #include "drawing.c"          // functions for drawing figures on fRGB images
+
 
 struct bitmap_font global_font; // globally visible fixed-width font (for HUD)
 
 
 // parameters of the algorithm (global variables, for easy testing)
 
+int    global_pyramid = 0;
+
 double global_harris_sigma = 1;    // s
 double global_harris_k = 0.24;     // k
-double global_harris_flat_th = 20; // t
+//double global_harris_flat_th = 20; // t
+double global_harris_flat_th = 200; // t
 int    global_harris_neigh = 1;    // n
 
 int    global_ransac_ntrials = 1000; // r
@@ -35,7 +39,6 @@ double global_mauricio_ssat = 200;
 double global_mauricio_gth = 40.00;
 int    global_mauricio_Cth = 3000;
 double global_mauricio_Sth = 20.0;
-#include "mauricio.c"         // function to compute Mauricio's blur detection
 
 
 int find_straight_line_by_ransac(int *out_mask, float line[3],
@@ -68,38 +71,62 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	}
 
 	// compute mauricio test
-	bool mauricio = compute_mauricio(gray, w, h);
+	bool mauricio = compute_mauricio(gray, w, h,
+			global_mauricio_ssat, global_mauricio_gth,
+			global_mauricio_Cth, global_mauricio_Sth);
 
 	// computi harris-hessian
 	int max_keypoints = 2000;
 	float point[3*max_keypoints];
-	double tic = seconds();
-	int npoints = harressian_ms(point, max_keypoints, gray, w, h,
-			global_harris_sigma,
-			global_harris_k,
-			global_harris_flat_th);
-	tic = seconds() - tic;
-	int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
-	for (int i = 0; i < npoints; i++) {
-		int si = round(log2(point[3*i+2]));
-		if (si < 30) phist[si] += 1;
-	}
-	fprintf(stderr, "npoints = %d:", npoints);
-	for (int i = 0; i < 8; i++)
-		fprintf(stderr, "\t%d", phist[i]);
-	fprintf(stderr, "\n");
-	//fprintf(stderr, "harris took %g milliseconds (%g hz)\n",
-	//		tic*1000, 1/tic);
+	int npoints = 0;
+	if (!global_pyramid) { // run regular harressian
+		// compute harressian points
+		npoints = harressian_ms(point, max_keypoints, gray, w, h,
+				global_harris_sigma,
+				global_harris_k,
+				global_harris_flat_th);
 
-	// fill-in gray values (for visualization)
-	for (int j = 0; j < h; j++)
-	for (int i = 0; i < w; i++)
-	{
-		int idx = j*w + i;
-		out[3*idx+0] = gray[idx];
-		out[3*idx+1] = gray[idx];
-		out[3*idx+2] = gray[idx];
+		// printf histogram of harressian scales
+		int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
+		for (int i = 0; i < npoints; i++) {
+			int si = round(log2(point[3*i+2]));
+			if (si < 30) phist[si] += 1;
+		}
+		fprintf(stderr, "npoints = %d:", npoints);
+		for (int i = 0; i < 8; i++)
+			fprintf(stderr, "\t%d", phist[i]);
+		fprintf(stderr, "\n");
+
+		// dump color image
+		for (int i = 0; i < 3*w*h; i++)
+			out[i] = in[i];
 	}
+	if (global_pyramid) { // display pyramid
+		fill_pyramid_level(gray, w, h,
+				global_harris_sigma,   // prefiltering sigma
+				global_ransac_maxerr,  // pyramid sigma
+				global_harris_neigh,   // octave
+				global_harris_k, global_harris_flat_th
+				);
+		for (int j = 0; j < h; j++)
+		for (int i = 0; i < w; i++)
+		{
+			int idx = j*w + i;
+			out[3*idx+0] = gray[idx];
+			out[3*idx+1] = gray[idx];
+			out[3*idx+2] = gray[idx];
+		}
+	}
+
+	//// fill-in gray values (for visualization)
+	//for (int j = 0; j < h; j++)
+	//for (int i = 0; i < w; i++)
+	//{
+	//	int idx = j*w + i;
+	//	out[3*idx+0] = gray[idx];
+	//	out[3*idx+1] = gray[idx];
+	//	out[3*idx+2] = gray[idx];
+	//}
 
 	// interior and exterior color for blob display
 	float cin[3], cou[3];
@@ -115,16 +142,22 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 		float x = point[3*i+0];
 		float y = point[3*i+1];
 		float radius = sqrt(2)*point[3*i+2];
-		//overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
-		//		x+radius, y+radius, cin[0], cin[1], cin[2]);
-		//overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
-		//		x+radius-1, y+radius-1, cou[0], cou[1], cou[2]);
-		overlay_circle_rgb(out,w,h, x,y,radius+0, cin[0],cin[1],cin[2]);
-		overlay_circle_rgb(out,w,h, x,y,radius+1, cou[0],cou[1],cou[2]);
+		if (radius < 0) {
+			radius *= -0.5/sqrt(2);
+			//x -= radius;
+			//y -= radius;
+			overlay_rectangle_rgb(out,w,h, x-radius, y-radius,
+					x+radius, y+radius, cin[0], cin[1], cin[2]);
+			overlay_rectangle_rgb(out,w,h, x-radius+1, y-radius+1,
+				x+radius-1, y+radius-1, cou[0], cou[1], cou[2]);
+		} else {
+			overlay_circle_rgb(out,w,h, x,y,radius+0, cin[0],cin[1],cin[2]);
+			overlay_circle_rgb(out,w,h, x,y,radius+1, cou[0],cou[1],cou[2]);
+		}
 	}
 
 	// compute ransac
-	if (npoints > 1)
+	if (0 && npoints > 1)
 	{
 		// data for ransac
 		int n = npoints;
@@ -189,18 +222,19 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 			global_ransac_maxerr);
 	put_string_in_float_image(out,w,h,3, 155,5, fg, 0, &global_font, buf);
 
-	framerate = seconds() - framerate;
-	snprintf(buf, 1000, "%g Hz", 1/framerate);
-	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
 	//snprintf(buf, 1000, "mauricio: %s", mauricio?"sharp":"blurred");
 	put_string_in_float_image(out,w,h,3, 355,18,
 			mauricio?fg:red, 0, &global_font, "mauricio: disabled");
+
+	framerate = seconds() - framerate;
+	snprintf(buf, 1000, "%g Hz", 1/framerate);
+	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
 }
 
 #ifdef ENABLE_SCREENSHOTS
 #include <sys/types.h>
 #include <unistd.h>
-#include <iio.h>
+#include "iio.h"
 static void save_screenshot(float *x, int w, int h)
 {
 	static int idx = 0;
@@ -319,6 +353,7 @@ int main( int argc, char *argv[] )
 		if (key == 'e') global_ransac_maxerr /= wheel_factor;
 		if (key == 'E') global_ransac_maxerr *= wheel_factor;
 		if (key == 'w') global_harris_k *= -1;
+		if (key == 'p') global_pyramid = !global_pyramid;
 		if (isalpha(key)) {
 			printf("harris_sigma = %g\n", global_harris_sigma);
 			printf("harris_k = %g\n", global_harris_k);
