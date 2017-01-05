@@ -1,7 +1,11 @@
 \documentclass[a4paper]{article}
+\usepackage{amsmath}
+\def\R{\mathbf{R}}
+
 
 \title{Simplest Blob Detection}
 \author{EML \& RGvG}
+
 
 \begin{document}
 
@@ -34,14 +38,61 @@ one paragrah with short history of feature detection: edges, points, etc
 one paragraph about keypoint detection: corners vs. local extrema vs. centers
 of blobs
 
-Let us model our image as a smooth function~$u:\R^2\to\R$.
-We use the following criteria for detecting (dark) blobs 
+\section{Overview}
+
+Let us model an image as a smooth function~$u:\R^2\to\R$.
+We use the following four criteria for detecting (dark) blobs:
 \begin{enumerate}
-	\item The position of a blob is a local minimum of the image~$u$
-	\item These neighboring points are significantly lighter than the center
-	\item The level lines around the blob are approximately circular
-	\item Blobs may occur at any scale
+	\item[(1)] The position of a blob is a local minimum of the image~$u$
+	\item[(2)] These center of a blob is much darker than the neighboring points
+	\item[(3)] The level lines of $u$ around a blob are approximately circular
+	\item[(4)] Blobs may occur at any scale
 \end{enumerate}
+For digital images, the first criterion is trivial to check: look at the
+8 neighboring pixels, and if any of them is darker, the central pixel is not a
+blob.  This criterion discards immediately about $87\%$ of the image domain.
+
+To formalize criteria (2) and (3), we look at the second derivatives of~$u$
+(since we already know that we are on a minimum, the first derivatives cannot
+give us any more information).  The second derivatives are arranged in the
+Hessian matrix:
+\[
+	H(u)=\begin{pmatrix}u_{xx} & u_{xy} \\ u_{xy} & u_{yy}\end{pmatrix}
+\]
+we extract two descriptors based on the trace and the determinant of this
+matrix:
+\[
+	\mathrm{deepness}(u)=u_{xx}+u_{yy}
+\]
+\[
+	\mathrm{roundness}(u)=\frac{u_{xx}u_{yy} - u_{xy}^2}{\left(u_{xx}+u_{yy} \right)^2}
+\]
+The deepness is the Laplacian of the image.  On local minima, the Laplacian is
+always positive, and its value is larger when the minimum is deeper.
+
+The roundness is the normalized ratio of the determinant and the trace
+of~$H(u)$.  For a local minimum, it is a number between~$0$ and~$\frac{1}{4}$.
+The name ``roundness'' is justified by observing for which functions~$u$ are
+these extremal values attained.  When the graph of~$u(x,y)=x^2+y^2$ is a
+paraboloid of revolution, whose level lines are circles, the roundness at the
+minimum is exactly~$\frac{1}{4}$.  When~$u(x,y)=x^2$ or~$u(x,y)=(x+y)^2$, the
+graph of~$u$ is a parabolic cylinder, the level lines are a collection of
+parallel straight lines, and the roundness at the minimum is exactly~$0$.  An
+intermediate case is for example~$u(x,y)=x^2+\alpha y^2$, for~$0 < \alpha < 1$,
+the level lines are ellipses and the value of the roundness is monotonic with
+their eccentricity.
+
+
+The second criterion can be formalized as~$\mathrm{deepness}(u) > \tau$,
+where~$\tau$ is a threshold.  Since we do not want to find any blobs on flat
+regions of the image, a good default value for~$\tau$ is proportional to the
+expected level of image noise.
+
+The third criterion can be formalized as $\mathrm{roundness}(u) > \kappa$,
+where~$\kappa$ is a threshold.  Since we want blobs that are as round as
+possible we set~$\kappa$ to a value which is very close but smaller
+than~$\frac{1}{4}$, for example~$\kappa=0.24$.
+
 
 \section{Simplest scale-space}
 
