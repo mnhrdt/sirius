@@ -22,9 +22,26 @@
 
 \section{Introduction}
 
-short history of feature detection: edges, points, etc
+Blob detection is the task of finding round and well-contrasted objects in an
+image.  See Figure~\ref{fig:blobsandnot} for examples of blobs and non-blobs.
+Notice that are two kinds of blobs: dark blobs on a light background and light
+blobs on a dark background.  In this article we focus only on the first kind
+(dark blobs); the case of light blobs is be obtained by applying the same
+algorithm to the negative image.
 
-keypoint detection: corners vs. local extrema vs. centers of blobs
+one paragrah with short history of feature detection: edges, points, etc
+
+one paragraph about keypoint detection: corners vs. local extrema vs. centers
+of blobs
+
+Let us model our image as a smooth function~$u:\R^2\to\R$.
+We use the following criteria for detecting (dark) blobs 
+\begin{enumerate}
+	\item The position of a blob is a local minimum of the image~$u$
+	\item These neighboring points are significantly lighter than the center
+	\item The level lines around the blob are approximately circular
+	\item Blobs may occur at any scale
+\end{enumerate}
 
 \section{Simplest scale-space}
 
@@ -53,7 +70,7 @@ second derivatives by finite differences at the closest octave
 \section{Simplest sub-pixel and sub-octave localization}
 
 separable sub-pixel localisation by fitting a parabola on each direction and
-finding its minimum
+finding its minimum (devernay localisation)
 
 \section{Experiments and conclusion}
 
