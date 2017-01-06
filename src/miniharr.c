@@ -155,7 +155,7 @@ static float parabolic_minimum(float p, float q, float r)
 }
 
 // ~ 9*w*h multiplications
-int harressian_nogauss(float *out_xyij, int max_npoints,
+int harressian_nogauss(float *out_xy, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
 	float sign = kappa > 0 ? 1 : -1;
@@ -193,8 +193,8 @@ int harressian_nogauss(float *out_xyij, int max_npoints,
 		float R0 = D - kappa * T * T;
 		if (T > tau && R0 > 0)
 		{
-			out_xyij[4*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
-			out_xyij[4*n+1] = j + parabolic_minimum(V0m, V00, V0p);
+			out_xy[2*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
+			out_xy[2*n+1] = j + parabolic_minimum(V0m, V00, V0p);
 			n += 1;
 		}
 		if (n >= max_npoints - 1)
