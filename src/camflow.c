@@ -27,8 +27,8 @@ int    global_pyramid = 0;
 
 double global_harris_sigma = 1;    // s
 double global_harris_k = 0.24;     // k
-//double global_harris_flat_th = 20; // t
-double global_harris_flat_th = 200; // t
+double global_harris_flat_th = 20; // t
+//double global_harris_flat_th = 200; // t
 int    global_harris_neigh = 1;    // n
 
 int    global_ransac_ntrials = 1000; // r
@@ -81,10 +81,11 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	int npoints = 0;
 	if (!global_pyramid) { // run regular harressian
 		// compute harressian points
-		npoints = harressian_ms(point, max_keypoints, gray, w, h,
+		npoints = harressian(point, max_keypoints, gray, w, h,
 				global_harris_sigma,
 				global_harris_k,
 				global_harris_flat_th);
+
 
 		// printf histogram of harressian scales
 		int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;

@@ -150,15 +150,15 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h,
 		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
 		float *tmp1 = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		float *tmp2 = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		float *tmp3 = xmalloc_float(p->w[i-1] * p->h[i-1]);
+		//float *tmp3 = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		poor_man_gaussian_filter(tmp1,p->x[i-1],p->w[i-1],p->h[i-1], S);
 		poor_man_gaussian_filter(tmp2,tmp1,p->w[i-1],p->h[i-1], S);
-		poor_man_gaussian_filter(tmp3,tmp2,p->w[i-1],p->h[i-1], S);
+		//poor_man_gaussian_filter(tmp3,tmp2,p->w[i-1],p->h[i-1], S);
 		downsample_by_factor_two(p->x[i], p->w[i], p->h[i],
-			       	tmp3, p->w[i-1], p->h[i-1]);
+			       	tmp2, p->w[i-1], p->h[i-1]);
 		free(tmp1);
 		free(tmp2);
-		free(tmp3);
+		//free(tmp3);
 	}
 	p->n = i;
 }
@@ -204,7 +204,7 @@ float harressian_score_at(float *x, int w, int h, int i, int j,
 		return -INFINITY;
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
-	tau *= sqrt(w * h / (500.0*500));
+	//tau *= sqrt(w * h / (500.0*500));
 	float Vmm = sign * x[(i-1) + (j-1)*w];
 	float V0m = sign * x[(i+0) + (j-1)*w];
 	float Vpm = sign * x[(i+1) + (j-1)*w];
@@ -245,7 +245,7 @@ int harressian_nogauss(float *out_xyij, int max_npoints,
 {
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
-	tau *= sqrt(w * h / (500.0*500));
+	//tau *= sqrt(w * h / (500.0*500));
 	int n = 0;
 	for (int j = 2; j < h - 2; j++)
 	for (int i = 2; i < w - 2; i++)
@@ -280,12 +280,6 @@ int harressian_nogauss(float *out_xyij, int max_npoints,
 		if (T > tau && R0 > 0)
 		{
 			// TODO: higher-order sub-pixel localisation
-			//float alpha_i = (Vp0 + Vm0)/2 - V00;
-			//float alpha_j = (V0p + V0m)/2 - V00;
-			//float beta_i  = (Vp0 - Vm0)/2;
-			//float beta_j  = (V0p - V0m)/2;
-			//out_xy[2*n + 0] = i - 0.5 * beta_i / alpha_i;
-			//out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
 			out_xyij[4*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
 			out_xyij[4*n+1] = j + parabolic_minimum(V0m, V00, V0p);
 			out_xyij[4*n+2] = i;
@@ -392,7 +386,7 @@ static void mini_filtering_inplace(float *x, int w, int h, float kappa, float ta
 	for (int i = 0; i < w*h; i++) tmp[i] = 0;
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
-	tau *= sqrt(w * h / (500.0*500));
+	//tau *= sqrt(w * h / (500.0*500));
 	fprintf(stderr, "tau = %g\n", tau);
 	for (int j = 2; j < h - 2; j++)
 	for (int i = 2; i < w - 2; i++)
@@ -513,8 +507,37 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 			float y = tab_xyij[4*i+1];
 			int ix = tab_xyij[4*i+2];
 			int iy = tab_xyij[4*i+3];
-			if (l < p->n - 1 && q->x[l+1][q->w[l+1]*iy/2+ix/2] > 0)
-				continue;
+			for (int dj = -2; dj <= 2; dj++)
+			for (int di = -2; di <= 2; di++)
+			{
+				int pix = ix/2+di;
+				int piy = iy/2+dj;
+				if (l < p->n - 1 && q->x[l+1][q->w[l+1]*piy+pix] > 0)
+			{
+				//fprintf(stderr, "ign %d %d %d\n", l, ix, iy);
+				//out_xys[3*n+0] = factor * ix;
+				//out_xys[3*n+1] = factor * iy;
+				//out_xys[3*n+2] = -factor;
+				//n += 1;
+				goto elposem;
+			}
+			}
+			for (int dj = -2; dj <= 2; dj++)
+			for (int di = -2; di <= 2; di++)
+			{
+				int pix = ix/4+di;
+				int piy = iy/4+dj;
+				if (l < p->n - 2 && q->x[l+2][q->w[l+2]*piy+pix] > 0)
+			{
+				//fprintf(stderr, "ign %d %d %d\n", l, ix, iy);
+				//out_xys[3*n+0] = factor * ix;
+				//out_xys[3*n+1] = factor * iy;
+				//out_xys[3*n+2] = -factor;
+				//n += 1;
+				goto elposem;
+			}
+			}
+elposem:
 			q->x[l][iy*p->w[l]+ix] += 1;
 			//float A=pyr_harressian_score(p,x/2,y/2,l+1,kappa,tau);
 			//float B=pyr_harressian_score(p,x*1,y*1,l+0,kappa,tau);
@@ -550,3 +573,41 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	free(sx);
 	return n;
 }
+
+bool point_is_redundant(float *a, float *b)
+{
+	float ax = a[0]; float ay = a[1]; float as = a[2];
+	float bx = b[0]; float by = b[1]; float bs = b[2];
+	float d = hypot(ax - bx, ay - by);
+	float s = fmax(as, bs);
+	return fabs(log2(as) - log2(bs)) < 3 && d < 1*s;
+}
+
+int remove_redundant_points(float *out_xys, float *in_xys, int n)
+{
+	int r = 0;
+	for (int i = 0; i < n; i++)
+	{
+		bool keep_this_i = true;
+		for (int j = i+1; j < n; j++) // assume they are ordered by "s"
+			if (point_is_redundant(in_xys + 3*i, in_xys + 3*j))
+				keep_this_i = false;
+		if (keep_this_i) {
+			for (int l = 0; l < 3; l++)
+				out_xys[3*r+l] = in_xys[3*i+l];
+			r += 1;
+		}
+	}
+	return r;
+}
+
+// harressian with multi-scale exclusion
+int harressian(float *out_xys, int max_npoints, float *x, int w, int h,
+		float sigma, float kappa, float tau)
+{
+	float tmp_xys[3*max_npoints];
+	int n = harressian_ms(tmp_xys, max_npoints, x, w, h, sigma, kappa, tau);
+	int r = remove_redundant_points(out_xys, tmp_xys, n);
+	return r;
+}
+
