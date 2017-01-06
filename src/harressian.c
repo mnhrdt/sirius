@@ -23,7 +23,6 @@ void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 			int ii = i + di - 1;
 			int jj = j + dj - 1;
 			ax += k[dj][di] * in[ii+jj*w];
-			//ax += in[ii+jj*w];
 		}
 		out[i+j*w] = ax / kn;
 	}
@@ -206,65 +205,55 @@ static float parabolic_minimum(float p, float q, float r)
 	return NAN;
 }
 
-#include <math.h>
-static
-float harressian_score_at(float *x, int w, int h, int i, int j,
-		float kappa, float tau)
-{
-	if (i < 1 || j < 1 || i > w-2 || j > h-2)
-		return -INFINITY;
-	float sign = kappa > 0 ? 1 : -1;
-	kappa = fabs(kappa);
-	//tau *= sqrt(w * h / (500.0*500));
-	float Vmm = sign * x[(i-1) + (j-1)*w];
-	float V0m = sign * x[(i+0) + (j-1)*w];
-	float Vpm = sign * x[(i+1) + (j-1)*w];
-	float Vm0 = sign * x[(i-1) + (j+0)*w];
-	float V00 = sign * x[(i+0) + (j+0)*w];
-	float Vp0 = sign * x[(i+1) + (j+0)*w];
-	float Vmp = sign * x[(i-1) + (j+1)*w];
-	float V0p = sign * x[(i+0) + (j+1)*w];
-	float Vpp = sign * x[(i+1) + (j+1)*w];
-	if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
-			|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
-		return -INFINITY;
-	float dxx = Vm0 - 2*V00 + Vp0;
-	float dyy = V0m - 2*V00 + V0p;
-	float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
-	float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
-	float T = dxx + dyy;
-	float D = dxx * dyy - dxy * dyx;
-	float R0 = D - kappa * T * T;
-	if (T > tau && R0 > 0)
-		return T;
-	else
-		return -INFINITY;
-}
+//#include <math.h>
+//static
+//float harressian_score_at(float *x, int w, int h, int i, int j,
+//		float kappa, float tau)
+//{
+//	if (i < 1 || j < 1 || i > w-2 || j > h-2)
+//		return -INFINITY;
+//	float sign = kappa > 0 ? 1 : -1;
+//	kappa = fabs(kappa);
+//	float Vmm = sign * x[(i-1) + (j-1)*w];
+//	float V0m = sign * x[(i+0) + (j-1)*w];
+//	float Vpm = sign * x[(i+1) + (j-1)*w];
+//	float Vm0 = sign * x[(i-1) + (j+0)*w];
+//	float V00 = sign * x[(i+0) + (j+0)*w];
+//	float Vp0 = sign * x[(i+1) + (j+0)*w];
+//	float Vmp = sign * x[(i-1) + (j+1)*w];
+//	float V0p = sign * x[(i+0) + (j+1)*w];
+//	float Vpp = sign * x[(i+1) + (j+1)*w];
+//	if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
+//			|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
+//		return -INFINITY;
+//	float dxx = Vm0 - 2*V00 + Vp0;
+//	float dyy = V0m - 2*V00 + V0p;
+//	float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
+//	float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
+//	float T = dxx + dyy;
+//	float D = dxx * dyy - dxy * dyx;
+//	float R0 = D - kappa * T * T;
+//	if (T > tau && R0 > 0)
+//		return T;
+//	else
+//		return -INFINITY;
+//}
 
-static int do_bound(int a, int b, int x)
-{
-	if (x < a) return a;
-	if (x >= b) return b - 1;
-	return x;
-}
-
-
-static
-float pyr_harressian_score(struct gray_image_pyramid *p,
-		int i, int j, int o, float kappa, float tau)
-{
-	o = do_bound(0, p->n, o);
-	return harressian_score_at(p->x[o], p->w[o], p->h[o], i, j, kappa, tau);
-}
+//static float pyr_harressian_score(struct gray_image_pyramid *p,
+//		int i, int j, int o, float kappa, float tau)
+//{
+//	if (o < 0 || o >= p->n)
+//		return -INFINITY;
+//	return harressian_score_at(p->x[o], p->w[o], p->h[o], i, j, kappa, tau);
+//}
 
 
 // ~ 9*w*h multiplications
-int harressian_nogauss(float *out_xyij, int max_npoints,
+int harressian_nogauss(float *out_xy, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
-	//tau *= sqrt(w * h / (500.0*500));
 	int n = 0;
 	for (int j = 2; j < h - 2; j++)
 	for (int i = 2; i < w - 2; i++)
@@ -299,10 +288,8 @@ int harressian_nogauss(float *out_xyij, int max_npoints,
 		if (T > tau && R0 > 0)
 		{
 			// TODO: higher-order sub-pixel localisation
-			out_xyij[4*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
-			out_xyij[4*n+1] = j + parabolic_minimum(V0m, V00, V0p);
-			out_xyij[4*n+2] = i;
-			out_xyij[4*n+3] = j;
+			out_xy[2*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
+			out_xy[2*n+1] = j + parabolic_minimum(V0m, V00, V0p);
 			n += 1;
 		}
 		if (n >= max_npoints - 1)
@@ -405,7 +392,6 @@ static void mini_filtering_inplace(float *x, int w, int h, float kappa, float ta
 	for (int i = 0; i < w*h; i++) tmp[i] = 0;
 	float sign = kappa > 0 ? 1 : -1;
 	kappa = fabs(kappa);
-	//tau *= sqrt(w * h / (500.0*500));
 	fprintf(stderr, "tau = %g\n", tau);
 	for (int j = 2; j < h - 2; j++)
 	for (int i = 2; i < w - 2; i++)
@@ -413,47 +399,23 @@ static void mini_filtering_inplace(float *x, int w, int h, float kappa, float ta
 		// Vmm V0m Vpm
 		// Vm0 V00 Vp0
 		// Vmp V0p Vpp
-		float Vmm = sign * x[(i-1) + (j-1)*w];
+		//float Vmm = sign * x[(i-1) + (j-1)*w];
 		float V0m = sign * x[(i+0) + (j-1)*w];
-		float Vpm = sign * x[(i+1) + (j-1)*w];
+		//float Vpm = sign * x[(i+1) + (j-1)*w];
 		float Vm0 = sign * x[(i-1) + (j+0)*w];
 		float V00 = sign * x[(i+0) + (j+0)*w];
 		float Vp0 = sign * x[(i+1) + (j+0)*w];
-		float Vmp = sign * x[(i-1) + (j+1)*w];
+		//float Vmp = sign * x[(i-1) + (j+1)*w];
 		float V0p = sign * x[(i+0) + (j+1)*w];
-		float Vpp = sign * x[(i+1) + (j+1)*w];
-		//if (V0m<V00 || Vm0<V00 || V0p<V00 || Vp0<V00
-		//		|| Vmm<V00 || Vpp<V00 || Vmp<V00 || Vpm<V00)
-		//	tmp[j*w+i] = 127;
-		//else {
-			float dxx = Vm0 - 2*V00 + Vp0;
-			float dyy = V0m - 2*V00 + V0p;
-			float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
-			float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
-			float T = dxx + dyy;
-			float D = dxx * dyy - dxy * dyx;
-			float R = D / (T*T);
-			//if (R > 0.1)
-				tmp[j*w+i] = float_to_byte(127+tau*T);
-			//else
-			//	tmp[j*w+i] = 127;
-			//if (R > 0.2)
-			//	tmp[j*w+i] = float_to_byte(127-0.1*T*fmax(0,D));
-			//else
-			//	tmp[j*w+i] = 127;
-		//}
-		//float R0 = D - kappa * T * T;
-		//if (T > tau && R0 > 0)
-		//{
-		//	// TODO: higher-order sub-pixel localisation
-		//	float alpha_i = (Vp0 + Vm0)/2 - V00;
-		//	float alpha_j = (V0p + V0m)/2 - V00;
-		//	float beta_i  = (Vp0 - Vm0)/2;
-		//	float beta_j  = (V0p - V0m)/2;
-		//	out_xy[2*n + 0] = i - 0.5 * beta_i / alpha_i;
-		//	out_xy[2*n + 1] = j - 0.5 * beta_j / alpha_j;
-		//	n += 1;
-		//}
+		//float Vpp = sign * x[(i+1) + (j+1)*w];
+		float dxx = Vm0 - 2*V00 + Vp0;
+		float dyy = V0m - 2*V00 + V0p;
+		//float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
+		//float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
+		float T = dxx + dyy;
+		//float D = dxx * dyy - dxy * dyx;
+		//float R = D / (T*T);
+		tmp[j*w+i] = float_to_byte(127+tau*T);
 	}
 
 	for (int i = 0; i < w*h; i++)
@@ -508,22 +470,20 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	// create image pyramid
 	struct gray_image_pyramid p[1];
 	fill_pyramid(p, sx, w, h, 2.8/2);
-	float *tab_xyij = xmalloc_float(4 * max_npoints);
+	float *tab_xy = xmalloc_float(2 * max_npoints);
 
 	// apply nongaussian harressian at each level of the pyramid
 	int n = 0;
 	for (int l = p->n - 1; l >= 0; l--)
 	{
-		int n_l = harressian_nogauss(tab_xyij, max_npoints - n,
+		int n_l = harressian_nogauss(tab_xy, max_npoints - n,
 				p->x[l], p->w[l], p->h[l], kappa, tau);
 		float factor = 1 << l;
 		for (int i = 0; i < n_l; i++)
 		{
 			if (n >= max_npoints) break;
-			float x = tab_xyij[4*i+0];
-			float y = tab_xyij[4*i+1];
-			int ix = tab_xyij[4*i+2];
-			int iy = tab_xyij[4*i+3];
+			float x = tab_xy[2*i+0];
+			float y = tab_xy[2*i+1];
 
 			// first-order scale localization
 			float A = fabs(pyramidal_laplacian(p, x/2, y/2, l+1));
@@ -546,7 +506,7 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	assert(n <= max_npoints);
 
 	// cleanup and exit
-	free(tab_xyij);
+	free(tab_xy);
 	free_pyramid(p);
 	free(sx);
 	return n;
