@@ -2,12 +2,10 @@
 
 #include <assert.h>
 #include <math.h>
-#include <stdbool.h>
 #include <string.h>
-
 #include "xmalloc.c"
 
-// ~ 9*w*h multiplications
+static
 void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 {
 	// build 3x3 approximation of gaussian kernel
@@ -52,7 +50,6 @@ static float getlaplacian_1(float *I, int w, int h, int i, int j)
 	          + getpixel_1(I, w, h, i  , j-1);
 }
 
-// 0 multiplications (ideally)
 static void downsample_by_factor_two(float *out, int ow, int oh,
 		float *in, int iw, int ih)
 {
@@ -72,6 +69,7 @@ struct gray_image_pyramid {
 	float *x[MAX_LEVELS]; // data of each level
 };
 
+static
 float pyramidal_laplacian(struct gray_image_pyramid *p, float x, float y, int o)
 {
 	if (o < 0 || o >= p->n)
@@ -79,18 +77,17 @@ float pyramidal_laplacian(struct gray_image_pyramid *p, float x, float y, int o)
 	float *I = p->x[o];
 	int w = p->w[o];
 	int h = p->h[o];
-	float a00 = getlaplacian_1(I, w, h, round(x+0), round(y+0));
-	float a10 = getlaplacian_1(I, w, h, round(x+1), round(y+0));
-	float a01 = getlaplacian_1(I, w, h, round(x+0), round(y+1));
-	float am0 = getlaplacian_1(I, w, h, round(x-1), round(y+0));
-	float a0m = getlaplacian_1(I, w, h, round(x+0), round(y-1));
+	float a00 = getlaplacian_1(I, w, h, round(x  ), round(y  ));
+	float a10 = getlaplacian_1(I, w, h, round(x+1), round(y  ));
+	float a01 = getlaplacian_1(I, w, h, round(x  ), round(y+1));
+	float am0 = getlaplacian_1(I, w, h, round(x-1), round(y  ));
+	float a0m = getlaplacian_1(I, w, h, round(x  ), round(y-1));
 	return fmax(a00, fmax(fmax(a10,a01),fmax(am0,a0m)));
 }
 
-// ~ 18*w*h multiplications
 static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 {
-	float S = 2.8 / 2;
+	float S = 2.8 / 2; // magic value! do not change
 
 	int i = 0;
 	p->w[i] = w;
@@ -118,7 +115,6 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 	}
 	p->n = i;
 }
-
 
 static void free_pyramid(struct gray_image_pyramid *p)
 {
@@ -150,12 +146,10 @@ static float parabolic_minimum(float p, float q, float r)
 	if ( isfinite(p) && !isfinite(q) && !isfinite(r)) return -1;
 	if (!isfinite(p) && !isfinite(q) &&  isfinite(r)) return 1;
 	if (!isfinite(p) && !isfinite(q) && !isfinite(r)) return NAN;
-	fprintf(stderr, "(%g %g %g)", p, q, r);
 	return NAN;
 }
 
-// ~ 9*w*h multiplications
-int harressian_nogauss(float *out_xy, int max_npoints,
+static int harressian_nogauss(float *out_xy, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
 	float sign = kappa > 0 ? 1 : -1;
@@ -183,24 +177,17 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 		float dyy = V0m - 2*V00 + V0p;
 		float dxy =  (Vpp + Vmm - Vpm - Vmp)/4;
 		float dyx = -(Vpm + Vmp - Vpp - Vmm)/4;
-		//float dxy =  (2*V00 +Vpm +Vmp -Vm0 -V0m -Vp0 -V0p)/2;
-		//float dyx = -(2*V00 +Vmm +Vpp -Vm0 -V0p -Vp0 -V0m)/2;
-		//
-		// XXX TODO : these schemes for dxy have directional aliasing!
-		//
 		float T = dxx + dyy;
 		float D = dxx * dyy - dxy * dyx;
 		float R0 = D - kappa * T * T;
-		if (T > tau && R0 > 0)
-		{
+		if (T > tau && R0 > 0) {
 			out_xy[2*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
 			out_xy[2*n+1] = j + parabolic_minimum(V0m, V00, V0p);
 			n += 1;
 		}
 		if (n >= max_npoints - 1)
-			goto done;
+			break;
 	}
-done:
 	assert(n < max_npoints);
 	return n;
 }
