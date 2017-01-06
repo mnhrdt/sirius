@@ -42,6 +42,15 @@ static float getpixel_1(float *I, int w, int h, int i, int j)
 	return I[i+j*w];
 }
 
+static float getlaplacian_1(float *I, int w, int h, int i, int j)
+{
+	return -4 * getpixel_1(I, w, h, i  , j  )
+	          + getpixel_1(I, w, h, i+1, j  )
+	          + getpixel_1(I, w, h, i  , j+1)
+	          + getpixel_1(I, w, h, i-1, j  )
+	          + getpixel_1(I, w, h, i  , j-1);
+}
+
 // 0 multiplications (ideally)
 static void downsample_by_factor_two(float *out, int ow, int oh,
 		float *in, int iw, int ih)
@@ -63,23 +72,22 @@ struct gray_image_pyramid {
 	float *x[MAX_LEVELS]; // data of each level
 };
 
-static int do_bound(int a, int b, int x)
+float pyramidal_laplacian(struct gray_image_pyramid *p, float x, float y, int o)
 {
-	if (x < a) return a;
-	if (x >= b) return b - 1;
-	return x;
+	if (o < 0 || o >= p->n)
+		return -INFINITY;
+	float *I = p->x[o];
+	int w = p->w[o];
+	int h = p->h[o];
+	float a00 = getlaplacian_1(I, w, h, round(x+0), round(y+0));
+	//return a00;
+	float a10 = getlaplacian_1(I, w, h, round(x+1), round(y+0));
+	float a01 = getlaplacian_1(I, w, h, round(x+0), round(y+1));
+	float am0 = getlaplacian_1(I, w, h, round(x-1), round(y+0));
+	float a0m = getlaplacian_1(I, w, h, round(x+0), round(y-1));
+	return (4*a00+a10+a01+am0+a0m)/8;//fmax(a00, fmax(fmax(a10,a01),fmax(am0,a0m)));
+	//return fmax(a00, fmax(fmax(a10,a01),fmax(am0,a0m)));
 }
-
-//static float pyr_getpixel_1(struct gray_image_pyramid *p, int i, int j, int o)
-//{
-//	o = do_bound(0, p->n   , o);
-//	i = do_bound(0, p->w[o], i);
-//	j = do_bound(0, p->h[o], j);
-//	float *x = p->x[o];
-//	int w = p->w[o];
-//	int h = p->h[o];
-//	return x[j*w+i];
-//}
 
 //#include <math.h>
 //float pyr_trilinear(struct gray_image_pyramid *p, float x, float y, float s)
@@ -180,10 +188,13 @@ static float parabolic_minimum(float p, float q, float r)
 		//if (r < p && r < q) return 1;
 		float alpha = (p + r) / 2 - q;
 		float beta  = (p - r) / 2;
-		float r = 0.5 * beta / alpha;
-		if (r < -0.9) return -0.9;
-		if (r > 0.9) return 0.9;
-		return r;
+		float R = 0.5 * beta / alpha;
+		if (fabs(R) > 0.5) {
+			if (p < r) return -1;
+			return 1;
+		}
+		assert(fabs(R) <= 0.5);
+		return R;
 	}
 	if ( isfinite(p) &&  isfinite(q) && !isfinite(r)) return p < q ? -1 : 0;
 	if (!isfinite(p) &&  isfinite(q) &&  isfinite(r)) return q < r ? 0 : 1;
@@ -229,6 +240,14 @@ float harressian_score_at(float *x, int w, int h, int i, int j,
 	else
 		return -INFINITY;
 }
+
+static int do_bound(int a, int b, int x)
+{
+	if (x < a) return a;
+	if (x >= b) return b - 1;
+	return x;
+}
+
 
 static
 float pyr_harressian_score(struct gray_image_pyramid *p,
@@ -487,9 +506,8 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	poor_man_gaussian_filter(sx, x, w, h, sigma);
 
 	// create image pyramid
-	struct gray_image_pyramid p[1], q[1];
+	struct gray_image_pyramid p[1];
 	fill_pyramid(p, sx, w, h, 2.8/2);
-	fill_pyramid(q, sx, w, h, -1);
 	float *tab_xyij = xmalloc_float(4 * max_npoints);
 
 	// apply nongaussian harressian at each level of the pyramid
@@ -502,66 +520,27 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 		for (int i = 0; i < n_l; i++)
 		{
 			if (n >= max_npoints) break;
-			// TODO: first-order scale localization
 			float x = tab_xyij[4*i+0];
 			float y = tab_xyij[4*i+1];
 			int ix = tab_xyij[4*i+2];
 			int iy = tab_xyij[4*i+3];
-			for (int dj = -2; dj <= 2; dj++)
-			for (int di = -2; di <= 2; di++)
-			{
-				int pix = ix/2+di;
-				int piy = iy/2+dj;
-				if (l < p->n - 1 && q->x[l+1][q->w[l+1]*piy+pix] > 0)
-			{
-				//fprintf(stderr, "ign %d %d %d\n", l, ix, iy);
-				//out_xys[3*n+0] = factor * ix;
-				//out_xys[3*n+1] = factor * iy;
-				//out_xys[3*n+2] = -factor;
-				//n += 1;
-				goto elposem;
-			}
-			}
-			for (int dj = -2; dj <= 2; dj++)
-			for (int di = -2; di <= 2; di++)
-			{
-				int pix = ix/4+di;
-				int piy = iy/4+dj;
-				if (l < p->n - 2 && q->x[l+2][q->w[l+2]*piy+pix] > 0)
-			{
-				//fprintf(stderr, "ign %d %d %d\n", l, ix, iy);
-				//out_xys[3*n+0] = factor * ix;
-				//out_xys[3*n+1] = factor * iy;
-				//out_xys[3*n+2] = -factor;
-				//n += 1;
-				goto elposem;
-			}
-			}
-elposem:
-			q->x[l][iy*p->w[l]+ix] += 1;
-			//float A=pyr_harressian_score(p,x/2,y/2,l+1,kappa,tau);
-			//float B=pyr_harressian_score(p,x*1,y*1,l+0,kappa,tau);
-			//fprintf(stderr, "(%d %g)", l, B);
-			//float CC[4] = {
-			//pyr_harressian_score(p,x*2+0,y*2+0,l-1,kappa,tau),
-			//pyr_harressian_score(p,x*2+1,y*2+0,l-1,kappa,tau),
-			//pyr_harressian_score(p,x*2+0,y*2+1,l-1,kappa,tau),
-			//pyr_harressian_score(p,x*2+1,y*2+1,l-1,kappa,tau),
-			//};
-			//float C = fmax(fmax(CC[0],CC[1]),fmax(CC[1],CC[3]));
-			//float dfactor = parabolic_minimum(-A, -B, -C);
-			//float dfactor = 0;
-			//if (dfactor > -2 && dfactor < 2 )
-			//{
+
+			// first-order scale localization
+			float A = fabs(pyramidal_laplacian(p, x/2, y/2, l+1));
+			float B = fabs(pyramidal_laplacian(p, x, y, l));
+			float C = fabs(pyramidal_laplacian(p, x*2, y*2, l-1));
+			if (l > 0 && C > B) continue;
+			if (A > B) continue;
+			//if (l > 0 && A > B) continue;
+			//if (A > B || C > B) continue;
+			float factor_scaling = 0;//parabolic_minimum(-A, -B, -C);
+			float new_factor = factor * (3*factor_scaling + 5) / 4;
+			//fprintf(stderr, "(%g %g %g) ", factor, factor_scaling, new_factor);
+
 			out_xys[3*n+0] = factor * x;
 			out_xys[3*n+1] = factor * y;
-			out_xys[3*n+2] = factor;
-			n += 1;
-			//out_xys[3*n+0] = factor * ix;
-			//out_xys[3*n+1] = factor * iy;
-			//out_xys[3*n+2] = -factor;
-			//n += 1;
-			//}// else fprintf(stderr, "(%d %g)", l, B);
+			out_xys[3*n+2] = new_factor;
+			n++;
 		}
 	}
 	assert(n <= max_npoints);
@@ -569,7 +548,6 @@ elposem:
 	// cleanup and exit
 	free(tab_xyij);
 	free_pyramid(p);
-	free_pyramid(q);
 	free(sx);
 	return n;
 }
