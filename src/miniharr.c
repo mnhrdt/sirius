@@ -1,7 +1,7 @@
 // implementation of the multiscale "harris hessian" keypoint detector
 
 // INTERFACE
-int harressian(
+int harressian( // return value: number of detected
 		float *out_xys,  // pre-allocated output buffer
 		int max_npoints, // maximun number of points to compute
 		float *x,        // input image data
@@ -11,6 +11,7 @@ int harressian(
 		float kappa,     // parameter: roundness threshold (e.g. 0.24)
 		float tau        // parameter: deepness threshold (e.g. 20.0)
 		);
+// note: if kappa is negative, find light blobs instead of dark blobs
 
 
 // IMPLEMENTATION
@@ -188,8 +189,9 @@ static int harressian_nogauss(float *out_xy, int max_npoints,
 			n += 1;
 		}
 		if (n >= max_npoints - 1)
-			break;
+			goto done;
 	}
+done:
 	assert(n < max_npoints);
 	return n;
 }
