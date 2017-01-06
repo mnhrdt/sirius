@@ -1,17 +1,30 @@
-// implementation of the "harris hessian" keypoint detector
+// implementation of the multiscale "harris hessian" keypoint detector
 
+// INTERFACE
+int harressian(
+		float *out_xys,  // pre-allocated output buffer
+		int max_npoints, // maximun number of points to compute
+		float *x,        // input image data
+		int w,           // input image width
+		int h,           // input image height
+		float sigma,     // parameter: pre-filtering size (e.g. 1.0)
+		float kappa,     // parameter: roundness threshold (e.g. 0.24)
+		float tau        // parameter: deepness threshold (e.g. 20.0)
+		);
+
+
+// IMPLEMENTATION
 #include <assert.h>
 #include <math.h>
 #include <string.h>
 #include "xmalloc.c"
 
-static
-void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
+static void poor_man_gaussian_filter(float *y, float *x, int w, int h, float s)
 {
 	// build 3x3 approximation of gaussian kernel
 	float k0 = 1;
-	float k1 = exp(-1/(2*sigma*sigma));
-	float k2 = exp(-sqrt(2)/(2*sigma*sigma));
+	float k1 = exp(-1/(2*s*s));
+	float k2 = exp(-sqrt(2)/(2*s*s));
 	float kn = k0 + 4*k1 + 4*k2;
 	float k[3][3] = {{k2, k1, k2}, {k1, k0, k1}, {k2, k1, k2}};
 
@@ -25,9 +38,9 @@ void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 		{
 			int ii = i + di - 1;
 			int jj = j + dj - 1;
-			ax += k[dj][di] * in[ii+jj*w];
+			ax += k[dj][di] * x[ii+jj*w];
 		}
-		out[i+j*w] = ax / kn;
+		y[i+j*w] = ax / kn;
 	}
 }
 
@@ -62,15 +75,14 @@ static void downsample_by_factor_two(float *out, int ow, int oh,
 }
 
 #define MAX_LEVELS 20
-struct gray_image_pyramid {
+struct pyramid {
 	int n;                // number of levels
 	int w[MAX_LEVELS];    // width of each level
 	int h[MAX_LEVELS];    // height of each level
 	float *x[MAX_LEVELS]; // data of each level
 };
 
-static
-float pyramidal_laplacian(struct gray_image_pyramid *p, float x, float y, int o)
+static float pyramidal_laplacian(struct pyramid *p, float x, float y, int o)
 {
 	if (o < 0 || o >= p->n)
 		return -INFINITY;
@@ -85,7 +97,7 @@ float pyramidal_laplacian(struct gray_image_pyramid *p, float x, float y, int o)
 	return fmax(a00, fmax(fmax(a10,a01),fmax(am0,a0m)));
 }
 
-static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
+static void fill_pyramid(struct pyramid *p, float *x, int w, int h)
 {
 	float S = 2.8 / 2; // magic value! do not change
 
@@ -101,22 +113,16 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h)
 		p->h[i] = ceil(p->h[i-1]/2);
 		if (p->w[i] <= 1 && p->h[i] <= 1) break;
 		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
-		float *tmp1 = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		float *tmp2 = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		//float *tmp3 = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		poor_man_gaussian_filter(tmp1,p->x[i-1],p->w[i-1],p->h[i-1], S);
-		poor_man_gaussian_filter(tmp2,tmp1,p->w[i-1],p->h[i-1], S);
-		//poor_man_gaussian_filter(tmp3,tmp2,p->w[i-1],p->h[i-1], S);
+		float *tmp = xmalloc_float(p->w[i-1] * p->h[i-1]);
+		poor_man_gaussian_filter(tmp,p->x[i-1],p->w[i-1],p->h[i-1], S);
 		downsample_by_factor_two(p->x[i], p->w[i], p->h[i],
-			       	tmp2, p->w[i-1], p->h[i-1]);
-		free(tmp1);
-		free(tmp2);
-		//free(tmp3);
+			       	tmp, p->w[i-1], p->h[i-1]);
+		free(tmp);
 	}
 	p->n = i;
 }
 
-static void free_pyramid(struct gray_image_pyramid *p)
+static void free_pyramid(struct pyramid *p)
 {
 	for (int i = 0; i < p->n; i++)
 		free(p->x[i]);
@@ -124,12 +130,8 @@ static void free_pyramid(struct gray_image_pyramid *p)
 
 static float parabolic_minimum(float p, float q, float r)
 {
-	//return 0;
 	if (isfinite(p) && isfinite(q) && isfinite(r))
 	{
-		//if (p < q && p < r) return -1;
-		//if (q < p && q < r) return 0;
-		//if (r < p && r < q) return 1;
 		float alpha = (p + r) / 2 - q;
 		float beta  = (p - r) / 2;
 		float R = 0.5 * beta / alpha;
@@ -200,7 +202,7 @@ int harressian(float *out_xys, int max_npoints, float *x, int w, int h,
 	poor_man_gaussian_filter(sx, x, w, h, sigma);
 
 	// create image pyramid
-	struct gray_image_pyramid p[1];
+	struct pyramid p[1];
 	fill_pyramid(p, sx, w, h);
 	float *tab_xy = xmalloc_float(2 * max_npoints);
 
@@ -224,11 +226,11 @@ int harressian(float *out_xys, int max_npoints, float *x, int w, int h,
 			if (l > 0 && C > B) continue;
 			if (A > B) continue;
 			float factor_scaling = parabolic_minimum(-A, -B, -C);
-			float new_factor = factor * (3*factor_scaling + 5) / 4;
 
+			// save this point
 			out_xys[3*n+0] = factor * x;
 			out_xys[3*n+1] = factor * y;
-			out_xys[3*n+2] = new_factor;
+			out_xys[3*n+2] = factor * (3*factor_scaling + 5) / 4;;
 			n++;
 		}
 	}
