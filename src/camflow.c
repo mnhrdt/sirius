@@ -131,7 +131,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 
 	// interior and exterior color for blob display
 	float cin[3], cou[3];
-	if (global_harris_k > 0) {
+	if (global_harris_k < 0) {
 		cin[0] = 0; cin[1] = 255; cin[2] = 0; // green
 		cou[0] = 0; cou[1] = 0; cou[2] = 255; // red
 	} else {
