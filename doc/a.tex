@@ -1,9 +1,11 @@
 \documentclass[a4paper]{article}
 \usepackage{amsmath}
+\usepackage[vlined,algoruled,linesnumbered]{algorithm2e}
+\usepackage{xcolor}
 \def\R{\mathbf{R}}
 
 
-\title{Simplest Blob Detection}
+\title{Harressian: a Simple Blob Detector}
 \author{EML \& RGvG}
 
 
@@ -14,14 +16,14 @@
 	We present a simple and fast multi-scale blob detector.
 	The ``blobs'' are defined as well-contrasted local maxima or minima of
 	the image with a round shape.
-	It is a straightforward differential criterion based on the Hessian
-	matrix of the image filtered at different scales, requiring about 18
-	multiplications per pixel.
+	The method is a straightforward differential criterion based on the
+	Hessian matrix of the image filtered at different scales, requiring
+	about 18 multiplications per pixel.
 	The criteria for the proposed implementation are, in decreasing order
 	of importance: (1) simplicity of the algorithm, (2) minimal
 	computational cost, (3) quality of the result.
-	We believe that our implementation is the shortest possible code that
-	is able to detect white and black blobs of any size in images.
+	Our implementation is among the shortest possible codes that
+	are able to detect white and black blobs of any size in images.
 \end{abstract}
 
 \section{Introduction}
@@ -43,16 +45,17 @@ of blobs
 Let us model an image as a smooth function~$u:\R^2\to\R$.
 We use the following four criteria for detecting (dark) blobs:
 \begin{enumerate}
-	\item[(1)] The position of a blob is a local minimum of the image~$u$
-	\item[(2)] These center of a blob is much darker than the neighboring points
-	\item[(3)] The level lines of $u$ around a blob are approximately circular
-	\item[(4)] Blobs may occur at any scale
+	\item[B1] The position of a blob is a local minimum of the image~$u$
+	\item[B2] These center of a blob is much darker than the neighboring points
+	\item[B3] The level lines of $u$ around a blob are approximately circular
+	\item[B4] Blobs may occur at any scale
 \end{enumerate}
-For digital images, the first criterion is trivial to check: look at the
+For digital images, the first criterion B1 is trivial to check: look at the
 8 neighboring pixels, and if any of them is darker, the central pixel is not a
-blob.  This criterion discards immediately about $87\%$ of the image domain.
+blob.  This criterion discards immediately around
+$87.5\%=100\left(1-\frac{1}{8}\right)$ of the image domain.
 
-To formalize criteria (2) and (3), we look at the second derivatives of~$u$
+To formalize criteria B2 and B3, we look at the second derivatives of~$u$
 (since we already know that we are on a minimum, the first derivatives cannot
 give us any more information).  The second derivatives are arranged in the
 Hessian matrix:
@@ -71,40 +74,66 @@ The deepness is the Laplacian of the image.  On local minima, the Laplacian is
 always positive, and its value is larger when the minimum is deeper.
 
 The roundness is the normalized ratio of the determinant and the trace
-of~$H(u)$.  For a local minimum, it is a number between~$0$ and~$\frac{1}{4}$.
+of~$H(u)$, and it is a non-dimensional quantity with values in the
+interval~$[0,\frac{1}{4}]$.
 The name ``roundness'' is justified by observing for which functions~$u$ are
 these extremal values attained.  When the graph of~$u(x,y)=x^2+y^2$ is a
 paraboloid of revolution, whose level lines are circles, the roundness at the
-minimum is exactly~$\frac{1}{4}$.  When~$u(x,y)=x^2$ or~$u(x,y)=(x+y)^2$, the
+minimum~$(0,0)$ is~$\frac{1}{4}$.  When~$u(x,y)=x^2$ or~$u(x,y)=(x+y)^2$, the
 graph of~$u$ is a parabolic cylinder, the level lines are a collection of
 parallel straight lines, and the roundness at the minimum is exactly~$0$.  An
 intermediate case is for example~$u(x,y)=x^2+\alpha y^2$, for~$0 < \alpha < 1$,
 the level lines are ellipses and the value of the roundness is monotonic with
 their eccentricity.
 
-
-The second criterion can be formalized as~$\mathrm{deepness}(u) > \tau$,
+The criterion B2 can be formalized as~$\mathrm{deepness}(u) > \tau$,
 where~$\tau$ is a threshold.  Since we do not want to find any blobs on flat
 regions of the image, a good default value for~$\tau$ is proportional to the
-expected level of image noise.
+expected level of noise in the image.
 
-The third criterion can be formalized as $\mathrm{roundness}(u) > \kappa$,
+The criterion B3 can be formalized as $\mathrm{roundness}(u) > \kappa$,
 where~$\kappa$ is a threshold.  Since we want blobs that are as round as
 possible we set~$\kappa$ to a value which is very close but smaller
 than~$\frac{1}{4}$, for example~$\kappa=0.24$.
 
+The criterion B4 {\color{red} rafa say something intelligent about multi-scale}.
 
-\section{Simplest scale-space}
+The high-level pseudo-code of the algorithm is thus described
+on~Algorithm~\ref{alg:hilevel}.
 
-poor man gaussian filtering
+\begin{algorithm}
+	\caption{\texttt{harressian}}
+	\label{alg:hilevel}
+	\DontPrintSemicolon
+	\SetKwInOut{Input}{Input}
+	\SetKwInOut{Output}{Output}
+	\SetKwFunction{multiscalepyramid}{multi-scale-pyramid}
+	\SetKwFunction{harressiannogauss}{harressian-single-scale}
+	\SetKwFunction{laplacian}{laplacian}
+	\Input{Image~$I$}
+	\Output{List of blob locations~$L=\{(x,y,\sigma)\}$}
+	\BlankLine
+	$L\gets\emptyset$\;
+	$(I_0,\ldots,I_n)\gets\multiscalepyramid(I)$\;
+	\For{$i=0,\ldots,n$}{
+		$L\gets L\,\cup\,\harressiannogauss(I_i)$\;
+		}
+	\For{$(x,y,\sigma)\in L$}{
+		$i\gets\left\lfloor\log_2(\sigma)\right\rfloor$\;
+		$a\gets\laplacian(I_{i+1},x,y)$\;
+		$b\gets\laplacian(I_{i\phantom{+1}},x,y)$\;
+		$c\gets\laplacian(I_{i-1},x,y)$\;
+		\If{$a>b$ or $c>b$}{
+			$L\gets L\setminus\{(x,y,\sigma)\}$\;
+			}
+		}
+	\Return{$L$}\;
+\end{algorithm}
 
-poor man downsampling
 
-construction of the image pyramid
+\section{Blob detection at one scale}
 
-\section{Simplest blob detection at one scale}
-
-criterion in the continuous domain:
+Criterion in the continuous domain:
 
 1) local minima of the $\sigma$-filtered image
 
@@ -113,10 +142,52 @@ $\frac{u_{xx}u_{yy}-u_{xy}^2}{(u_{xx}+u_{yy})^2}>\kappa$
 
 discretization
 
-poor man gaussian filtering
+Poor man gaussian filtering
 
-second derivatives by finite differences at the closest octave
+Second derivatives by finite differences at the closest octave
 
+
+\section{Scale-space}
+
+Poor man gaussian filtering
+
+Poor man downsampling
+
+Construction of the image pyramid
+
+The basic data structure for exploring such large images is the multi-scale
+pyramid. This data structure is simple: it is the union of several
+vertically down-scaled versions of the original image, by factors that are
+successive powers of two, called ``octaves''.  The construction of this
+data structure is detailed in algorithm~\ref{alg:pyramid}.
+
+\begin{algorithm}
+	\caption{\texttt{build-multiscale-pyramid}}
+	\label{alg:pyramid}
+	\DontPrintSemicolon
+	\SetKwInOut{Input}{Input}
+	\SetKwInOut{Output}{Output}
+	\SetKwFunction{zoomout}{zoom-out}
+	\SetKwFunction{zoomin}{zoom-in}
+	\SetKwFunction{approximategaussianblur}{approximate-gaussian-blur}
+	\Input{Image~$I$ of size $W\times H$}
+	\Output{List of images~$I_0,\ldots,I_N$}
+	\BlankLine
+	$\sigma\gets 1.4$\;
+	$N\gets \left\lfloor\log_2\min(W,H)\right\rfloor$\;
+	$I_0\leftarrow I$\;
+	\For{$n=1,\ldots,N$}{
+		$J\gets\approximategaussianblur(I_{n-1},\sigma)$\;
+		$I_n\leftarrow\ \textrm{new image of size~$
+		\left\lceil\frac{W}{2^n}\right\rceil
+		\times
+		\left\lceil\frac{H}{2^n}\right\rceil
+		$}$\;
+		\For{$(i,j)\in I_n$}{
+			$I_n(i,j)\leftarrow J(2i,2j)$\;
+		}
+	}
+\end{algorithm}
 
 \section{Simplest sub-pixel and sub-octave localization}
 
