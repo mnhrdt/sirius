@@ -8,7 +8,7 @@ void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 	// build 3x3 approximation of gaussian kernel
 	float k0 = 1;
 	float k1 = exp(-1/(2*sigma*sigma));
-	float k2 = exp(-sqrt(2)/(2*sigma*sigma));
+	float k2 = exp(-2/(2*sigma*sigma));
 	float kn = k0 + 4*k1 + 4*k2;
 	float k[3][3] = {{k2, k1, k2}, {k1, k0, k1}, {k2, k1, k2}};
 
@@ -22,6 +22,74 @@ void poor_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
 		{
 			int ii = i + di - 1;
 			int jj = j + dj - 1;
+			ax += k[dj][di] * in[ii+jj*w];
+		}
+		out[i+j*w] = ax / kn;
+	}
+}
+
+void rich_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
+{
+	// build 5x5 approximation of gaussian kernel
+	float k0 = 1;
+	float k1 = exp(-1/(2*sigma*sigma));
+	float k2 = exp(-4/(2*sigma*sigma));
+	float kd = exp(-2/(2*sigma*sigma));
+	float kD = exp(-8/(2*sigma*sigma));
+	float kh = exp(-5/(2*sigma*sigma));
+	float kn = k0 + 4*k1 + 4*k2 + 4*kd + 4*kD + 8*kh;
+	float k[5][5] = {
+		{kD, kh, k2, kh, kD},
+		{kh, kd, k1, kd, kh},
+		{k2, k1, k0, k1, k2},
+		{kh, kd, k1, kd, kh},
+		{kD, kh, k2, kh, kD},
+	};
+
+	// hand-made convolution
+	for (int j = 2; j < h - 2; j ++)
+	for (int i = 2; i < w - 2; i ++)
+	{
+		float ax = 0;
+		for (int dj = 0; dj < 5; dj++)
+		for (int di = 0; di < 5; di++)
+		{
+			int ii = i + di - 2;
+			int jj = j + dj - 2;
+			ax += k[dj][di] * in[ii+jj*w];
+		}
+		out[i+j*w] = ax / kn;
+	}
+}
+
+void fancy_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
+{
+	// build 5x5 approximation of gaussian kernel
+	float k0 = 1;
+	float k1 = exp(-1/(2*sigma*sigma));
+	float k2 = exp(-4/(2*sigma*sigma));
+	float kd = exp(-2/(2*sigma*sigma));
+	float kD = exp(-8/(2*sigma*sigma));
+	float kh = exp(-5/(2*sigma*sigma));
+	float kn = k0 + 4*k1 + 4*k2 + 4*kd + 4*kD + 8*kh;
+	float k[5][5] = {
+		{kD, kh, k2, kh, kD},
+		{kh, kd, k1, kd, kh},
+		{k2, k1, k0, k1, k2},
+		{kh, kd, k1, kd, kh},
+		{kD, kh, k2, kh, kD},
+	};
+
+	// hand-made convolution
+	for (int j = 2; j < h - 2; j ++)
+	for (int i = 2; i < w - 2; i ++)
+	{
+		float ax = 0;
+		for (int dj = 0; dj < 5; dj++)
+		for (int di = 0; di < 5; di++)
+		{
+			int ii = i + di - 2;
+			int jj = j + dj - 2;
 			ax += k[dj][di] * in[ii+jj*w];
 		}
 		out[i+j*w] = ax / kn;
@@ -156,15 +224,15 @@ static void fill_pyramid(struct gray_image_pyramid *p, float *x, int w, int h,
 		if (p->w[i] <= 1 && p->h[i] <= 1) break;
 		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
 		float *tmp1 = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		float *tmp2 = xmalloc_float(p->w[i-1] * p->h[i-1]);
+		//float *tmp2 = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		//float *tmp3 = xmalloc_float(p->w[i-1] * p->h[i-1]);
 		poor_man_gaussian_filter(tmp1,p->x[i-1],p->w[i-1],p->h[i-1], S);
-		poor_man_gaussian_filter(tmp2,tmp1,p->w[i-1],p->h[i-1], S);
+		//poor_man_gaussian_filter(tmp2,tmp1,p->w[i-1],p->h[i-1], S);
 		//poor_man_gaussian_filter(tmp3,tmp2,p->w[i-1],p->h[i-1], S);
 		downsample_by_factor_two(p->x[i], p->w[i], p->h[i],
-			       	tmp2, p->w[i-1], p->h[i-1]);
+			       	tmp1, p->w[i-1], p->h[i-1]);
 		free(tmp1);
-		free(tmp2);
+		//free(tmp2);
 		//free(tmp3);
 	}
 	p->n = i;

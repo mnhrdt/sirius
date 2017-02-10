@@ -1,7 +1,7 @@
 // implementation of the multiscale "harris hessian" keypoint detector
 
 // INTERFACE
-int harressian( // return value: number of detected
+int harressian( // return value: number of detected points
 		float *out_xys,  // pre-allocated output buffer
 		int max_npoints, // maximun number of points to compute
 		float *x,        // input image data
@@ -11,25 +11,34 @@ int harressian( // return value: number of detected
 		float kappa,     // parameter: roundness threshold (e.g. 0.24)
 		float tau        // parameter: deepness threshold (e.g. 20.0)
 		);
-// note: if kappa is negative, find light blobs instead of dark blobs
+// note: the output is an array of triplets with (x,y,s) of each detected blob
+// note 2: if kappa is negative, find "light blobs" instead of "dark blobs"
 
 
 // IMPLEMENTATION
 #include <assert.h>
 #include <math.h>
 #include <string.h>
-#include "xmalloc.c"
+#include <stdlib.h>
 
-static void poor_man_gaussian_filter(float *y, float *x, int w, int h, float s)
+static float *xmalloc_float(int n) // utility function
 {
-	// build 3x3 approximation of gaussian kernel
+	float *r = malloc(n * sizeof*r);
+	if (!r) // if out of memory, force a segfault to ease debugging
+		return r+*(volatile int*)0;
+	return r;
+}
+
+static void gaussian_smoothing(float *y, float *x, int w, int h, float s)
+{
+	// build 3x3 approximation of gaussian kernel "k"
 	float k0 = 1;
 	float k1 = exp(-1/(2*s*s));
 	float k2 = exp(-sqrt(2)/(2*s*s));
 	float kn = k0 + 4*k1 + 4*k2;
 	float k[3][3] = {{k2, k1, k2}, {k1, k0, k1}, {k2, k1, k2}};
 
-	// hand-made convolution
+	// compute y = k * x
 	for (int j = 1; j < h - 1; j ++)
 	for (int i = 1; i < w - 1; i ++)
 	{
@@ -45,8 +54,8 @@ static void poor_man_gaussian_filter(float *y, float *x, int w, int h, float s)
 	}
 }
 
-// extrapolate by nearest value (useful for Neumann boundary conditions)
-static float getpixel_1(float *I, int w, int h, int i, int j)
+// extrapolate by nearest value
+static float getpixel(float *I, int w, int h, int i, int j)
 {
 	if (i < 0) i = 0;
 	if (j < 0) j = 0;
@@ -55,16 +64,16 @@ static float getpixel_1(float *I, int w, int h, int i, int j)
 	return I[i+j*w];
 }
 
-static float getlaplacian_1(float *I, int w, int h, int i, int j)
+static float getlaplacian(float *I, int w, int h, int i, int j)
 {
-	return -4 * getpixel_1(I, w, h, i  , j  )
-	          + getpixel_1(I, w, h, i+1, j  )
-	          + getpixel_1(I, w, h, i  , j+1)
-	          + getpixel_1(I, w, h, i-1, j  )
-	          + getpixel_1(I, w, h, i  , j-1);
+	return -4 * getpixel(I, w, h, i  , j  )
+	          + getpixel(I, w, h, i+1, j  )
+	          + getpixel(I, w, h, i  , j+1)
+	          + getpixel(I, w, h, i-1, j  )
+	          + getpixel(I, w, h, i  , j-1);
 }
 
-static void downsample_by_factor_two(float *out, int ow, int oh,
+static void downsample(float *out, int ow, int oh,
 		float *in, int iw, int ih)
 {
 	if (!out || !in) return;
@@ -72,7 +81,7 @@ static void downsample_by_factor_two(float *out, int ow, int oh,
 	assert(abs(2*oh-ih) < 2);
 	for (int j = 0; j < oh; j++)
 	for (int i = 0; i < ow; i++)
-		out[ow*j+i] = getpixel_1(in, iw, ih, 2*i, 2*j);
+		out[ow*j+i] = getpixel(in, iw, ih, 2*i, 2*j);
 }
 
 #define MAX_LEVELS 20
@@ -90,12 +99,7 @@ static float pyramidal_laplacian(struct pyramid *p, float x, float y, int o)
 	float *I = p->x[o];
 	int w = p->w[o];
 	int h = p->h[o];
-	float a00 = getlaplacian_1(I, w, h, round(x  ), round(y  ));
-	float a10 = getlaplacian_1(I, w, h, round(x+1), round(y  ));
-	float a01 = getlaplacian_1(I, w, h, round(x  ), round(y+1));
-	float am0 = getlaplacian_1(I, w, h, round(x-1), round(y  ));
-	float a0m = getlaplacian_1(I, w, h, round(x  ), round(y-1));
-	return fmax(a00, fmax(fmax(a10,a01),fmax(am0,a0m)));
+	return getlaplacian(I, w, h, round(x), round(y));
 }
 
 static void fill_pyramid(struct pyramid *p, float *x, int w, int h)
@@ -114,11 +118,10 @@ static void fill_pyramid(struct pyramid *p, float *x, int w, int h)
 		p->h[i] = ceil(p->h[i-1]/2);
 		if (p->w[i] <= 1 && p->h[i] <= 1) break;
 		p->x[i] = xmalloc_float(p->w[i] * p->h[i]);
-		float *tmp = xmalloc_float(p->w[i-1] * p->h[i-1]);
-		poor_man_gaussian_filter(tmp,p->x[i-1],p->w[i-1],p->h[i-1], S);
-		downsample_by_factor_two(p->x[i], p->w[i], p->h[i],
-			       	tmp, p->w[i-1], p->h[i-1]);
-		free(tmp);
+		float *t = xmalloc_float(p->w[i-1] * p->h[i-1]);
+		gaussian_smoothing(t, p->x[i-1], p->w[i-1], p->h[i-1], S);
+		downsample(p->x[i], p->w[i], p->h[i], t, p->w[i-1], p->h[i-1]);
+		free(t);
 	}
 	p->n = i;
 }
@@ -149,7 +152,7 @@ static float parabolic_minimum(float p, float q, float r)
 	if ( isfinite(p) && !isfinite(q) && !isfinite(r)) return -1;
 	if (!isfinite(p) && !isfinite(q) &&  isfinite(r)) return 1;
 	if (!isfinite(p) && !isfinite(q) && !isfinite(r)) return NAN;
-	return NAN;
+	return NAN; // isfinite(p) && !isfinite(q) && isfinite(r) // impossible
 }
 
 static int harressian_nogauss(float *out_xy, int max_npoints,
@@ -201,7 +204,7 @@ int harressian(float *out_xys, int max_npoints, float *x, int w, int h,
 {
 	// filter input image
 	float *sx = xmalloc_float(w * h);
-	poor_man_gaussian_filter(sx, x, w, h, sigma);
+	gaussian_smoothing(sx, x, w, h, sigma);
 
 	// create image pyramid
 	struct pyramid p[1];

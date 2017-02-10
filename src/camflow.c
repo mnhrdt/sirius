@@ -31,7 +31,7 @@ double global_harris_flat_th = 20; // t
 //double global_harris_flat_th = 200; // t
 int    global_harris_neigh = 1;    // n
 
-int    global_ransac_ntrials = 1000; // r
+int    global_ransac_ntrials = 300; // r
 int    global_ransac_minliers = 22;    // i
 double global_ransac_maxerr = 1.5;    // e
 
