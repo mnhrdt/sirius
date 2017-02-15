@@ -77,7 +77,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 
 	// computi harris-hessian
 	int max_keypoints = 2000;
-	float point[3*max_keypoints];
+	float point[4*max_keypoints];
 	int npoints = 0;
 	if (!global_pyramid) { // run regular harressian
 		// compute harressian points
@@ -90,7 +90,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 		// printf histogram of harressian scales
 		int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
 		for (int i = 0; i < npoints; i++) {
-			int si = round(log2(point[3*i+2]));
+			int si = round(log2(point[4*i+2]));
 			if (si < 30) phist[si] += 1;
 		}
 		fprintf(stderr, "npoints = %d:", npoints);
@@ -140,9 +140,9 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	}
 	for (int i = 0; i < npoints; i++)
 	{
-		float x = point[3*i+0];
-		float y = point[3*i+1];
-		float radius = sqrt(2)*point[3*i+2];
+		float x = point[4*i+0];
+		float y = point[4*i+1];
+		float radius = sqrt(2)*point[4*i+2];
 		if (radius < 0) {
 			radius *= -0.5/sqrt(2);
 			//x -= radius;
@@ -166,7 +166,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 		float *keypoints = xmalloc_float(2 * n);
 		for (int i = 0; i < n; i++)
 		for (int l = 0; l < 2; l++)
-			keypoints[2*i+l] = point[3*i+l];
+			keypoints[2*i+l] = point[4*i+l];
 
 		for (int i = 0; i < 10; i++)
 		{
