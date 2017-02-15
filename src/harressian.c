@@ -317,7 +317,7 @@ static float parabolic_minimum(float p, float q, float r)
 
 
 // ~ 9*w*h multiplications
-int harressian_nogauss(float *out_xy, int max_npoints,
+int harressian_nogauss(float *out_xyt, int max_npoints,
 		float *x, int w, int h, float kappa, float tau)
 {
 	float sign = kappa > 0 ? 1 : -1;
@@ -356,8 +356,9 @@ int harressian_nogauss(float *out_xy, int max_npoints,
 		if (T > tau && R0 > 0)
 		{
 			// TODO: higher-order sub-pixel localisation
-			out_xy[2*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
-			out_xy[2*n+1] = j + parabolic_minimum(V0m, V00, V0p);
+			out_xyt[3*n+0] = i + parabolic_minimum(Vm0, V00, Vp0);
+			out_xyt[3*n+1] = j + parabolic_minimum(V0m, V00, V0p);
+			out_xyt[3*n+2] = T;
 			n += 1;
 		}
 		if (n >= max_npoints - 1)
@@ -528,7 +529,7 @@ void fill_pyramid_level(float *inout, int w, int h,
 	free(sx);
 }
 
-int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
+int harressian_ms(float *out_xyst, int max_npoints, float *x, int w, int h,
 		float sigma, float kappa, float tau)
 {
 	// filter input image
@@ -538,20 +539,20 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 	// create image pyramid
 	struct gray_image_pyramid p[1];
 	fill_pyramid(p, sx, w, h, 2.8/2);
-	float *tab_xy = xmalloc_float(2 * max_npoints);
+	float *tab_xyt = xmalloc_float(3 * max_npoints);
 
 	// apply nongaussian harressian at each level of the pyramid
 	int n = 0;
 	for (int l = p->n - 1; l >= 0; l--)
 	{
-		int n_l = harressian_nogauss(tab_xy, max_npoints - n,
+		int n_l = harressian_nogauss(tab_xyt, max_npoints - n,
 				p->x[l], p->w[l], p->h[l], kappa, tau);
 		float factor = 1 << l;
 		for (int i = 0; i < n_l; i++)
 		{
 			if (n >= max_npoints) break;
-			float x = tab_xy[2*i+0];
-			float y = tab_xy[2*i+1];
+			float x = tab_xyt[3*i+0];
+			float y = tab_xyt[3*i+1];
 
 			// first-order scale localization
 			float A = fabs(pyramidal_laplacian(p, x/2, y/2, l+1));
@@ -565,16 +566,17 @@ int harressian_ms(float *out_xys, int max_npoints, float *x, int w, int h,
 			float new_factor = factor * (3*factor_scaling + 5) / 4;
 			//fprintf(stderr, "(%g %g %g) ", factor, factor_scaling, new_factor);
 
-			out_xys[3*n+0] = factor * x;
-			out_xys[3*n+1] = factor * y;
-			out_xys[3*n+2] = new_factor;
+			out_xyst[4*n+0] = factor * x;
+			out_xyst[4*n+1] = factor * y;
+			out_xyst[4*n+2] = new_factor;
+			out_xyst[4*n+3] = tab_xyt[3*i+2];
 			n++;
 		}
 	}
 	assert(n <= max_npoints);
 
 	// cleanup and exit
-	free(tab_xy);
+	free(tab_xyt);
 	free_pyramid(p);
 	free(sx);
 	return n;
@@ -589,18 +591,18 @@ bool point_is_redundant(float *a, float *b)
 	return fabs(log2(as) - log2(bs)) < 3 && d < 1*s;
 }
 
-int remove_redundant_points(float *out_xys, float *in_xys, int n)
+int remove_redundant_points(float *out_xyst, float *in_xyst, int n)
 {
 	int r = 0;
 	for (int i = 0; i < n; i++)
 	{
 		bool keep_this_i = true;
 		for (int j = i+1; j < n; j++) // assume they are ordered by "s"
-			if (point_is_redundant(in_xys + 3*i, in_xys + 3*j))
+			if (point_is_redundant(in_xyst + 4*i, in_xyst + 4*j))
 				keep_this_i = false;
 		if (keep_this_i) {
-			for (int l = 0; l < 3; l++)
-				out_xys[3*r+l] = in_xys[3*i+l];
+			for (int l = 0; l < 4; l++)
+				out_xyst[4*r+l] = in_xyst[4*i+l];
 			r += 1;
 		}
 	}
@@ -608,12 +610,13 @@ int remove_redundant_points(float *out_xys, float *in_xys, int n)
 }
 
 // harressian with multi-scale exclusion
-int harressian(float *out_xys, int max_npoints, float *x, int w, int h,
+// xyst = (x position, y position, scale, score)
+int harressian(float *out_xyst, int max_npoints, float *x, int w, int h,
 		float sigma, float kappa, float tau)
 {
-	float tmp_xys[3*max_npoints];
-	int n = harressian_ms(tmp_xys, max_npoints, x, w, h, sigma, kappa, tau);
-	int r = remove_redundant_points(out_xys, tmp_xys, n);
+	float tmp_xyst[4*max_npoints];
+	int n = harressian_ms(tmp_xyst, max_npoints, x, w, h, sigma,kappa,tau);
+	int r = remove_redundant_points(out_xyst, tmp_xyst, n);
 	return r;
 }
 
