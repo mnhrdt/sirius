@@ -53,6 +53,8 @@ int find_straight_line_by_ransac(int *out_mask, float line[3],
 			2, ntrials, 3, max_err, NULL, NULL);
 }
 
+#include "tracker.c"
+
 // process one (float rgb) frame
 static void process_frgb_frame(float *out, float *in, int w, int h)
 {
@@ -78,14 +80,22 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	// computi harris-hessian
 	int max_keypoints = 2000;
 	float point[4*max_keypoints];
+	float tmp_point[4*max_keypoints];
+	struct point_tracker tracker[1];
+	point_tracker_init(tracker, 2);
 	int npoints = 0;
 	if (!global_pyramid) { // run regular harressian
 		// compute harressian points
-		npoints = harressian(point, max_keypoints, gray, w, h,
+		int tmp_npoints = harressian(tmp_point, max_keypoints,
+				gray, w, h,
 				global_harris_sigma,
 				global_harris_k,
 				global_harris_flat_th);
 
+		// filter the points by the tracker
+		point_tracker_add_frame(tracker, tmp_point, tmp_npoints);
+		npoints = point_tracker_extract_points(point, tracker,
+				global_harris_flat_th);
 
 		// printf histogram of harressian scales
 		int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
