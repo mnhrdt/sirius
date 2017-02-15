@@ -40,6 +40,8 @@ double global_mauricio_gth = 40.00;
 int    global_mauricio_Cth = 3000;
 double global_mauricio_Sth = 20.0;
 
+double global_tracker_toggle = 1;
+
 
 int find_straight_line_by_ransac(int *out_mask, float line[3],
 		float *points, int npoints,
@@ -54,6 +56,8 @@ int find_straight_line_by_ransac(int *out_mask, float line[3],
 }
 
 #include "tracker.c"
+
+static struct point_tracker global_tracker[1];
 
 // process one (float rgb) frame
 static void process_frgb_frame(float *out, float *in, int w, int h)
@@ -81,8 +85,6 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	int max_keypoints = 2000;
 	float point[4*max_keypoints];
 	float tmp_point[4*max_keypoints];
-	struct point_tracker tracker[1];
-	point_tracker_init(tracker, 2);
 	int npoints = 0;
 	if (!global_pyramid) { // run regular harressian
 		// compute harressian points
@@ -90,12 +92,20 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 				gray, w, h,
 				global_harris_sigma,
 				global_harris_k,
-				global_harris_flat_th);
+				global_harris_flat_th*0.3);
 
 		// filter the points by the tracker
-		point_tracker_add_frame(tracker, tmp_point, tmp_npoints);
-		npoints = point_tracker_extract_points(point, tracker,
-				global_harris_flat_th);
+		if (global_tracker_toggle) {
+			point_tracker_add_frame(global_tracker,
+					tmp_point,tmp_npoints);
+			npoints = point_tracker_extract_points(point,
+					global_tracker,
+					global_harris_flat_th);
+		} else {
+			npoints = tmp_npoints;
+			for (int i = 0; i < 4*npoints; i++)
+				point[i] = tmp_point[i];
+		}
 
 		// printf histogram of harressian scales
 		int phist[30]; for (int i = 0; i < 30; i++) phist[i] = 0;
@@ -237,6 +247,9 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 	put_string_in_float_image(out,w,h,3, 355,18,
 			mauricio?fg:red, 0, &global_font, "mauricio: disabled");
 
+	put_string_in_float_image(out,w,h,3, 355,31, fg, 0, &global_font,
+	       	global_tracker_toggle?"tracker: ENABLED":"tracker: disabled");
+
 	framerate = seconds() - framerate;
 	snprintf(buf, 1000, "%g Hz", 1/framerate);
 	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
@@ -265,6 +278,7 @@ int main( int argc, char *argv[] )
 	int cam_id = atoi(argv[1]);
 
 	global_font = uncompress_font(*xfont_8x13); // prepare font for HUD
+	point_tracker_init(global_tracker, 2);
 
 	// interactivity state
 	CvCapture *capture = 0;
@@ -365,6 +379,7 @@ int main( int argc, char *argv[] )
 		if (key == 'E') global_ransac_maxerr *= wheel_factor;
 		if (key == 'w') global_harris_k *= -1;
 		if (key == 'p') global_pyramid = !global_pyramid;
+		if (key == 'z') global_tracker_toggle = !global_tracker_toggle;
 		if (isalpha(key)) {
 			printf("harris_sigma = %g\n", global_harris_sigma);
 			printf("harris_k = %g\n", global_harris_k);
