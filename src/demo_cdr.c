@@ -25,6 +25,8 @@ struct bitmap_font global_font; // globally visible fixed-width font (for HUD)
 
 int    global_mode = 0;
 char  *global_name = "(nothing)";
+double global_alpha_gain = 3;
+double global_sigma = 0.5;
 
 int    global_pyramid = 0;
 
@@ -45,6 +47,46 @@ double global_mauricio_Sth = 20.0;
 
 double global_tracker_toggle = 1;
 
+void rich_man_gaussian_filter(float *out, float *in, int w, int h, float sigma)
+{
+	if (sigma == 0)
+	{
+		for (int i = 0; i < w*h; i++)
+			out[i] = in[i];
+		return;
+	}
+
+	// build 5x5 approximation of gaussian kernel
+	float k0 = 1;
+	float k1 = exp(-1/(2*sigma*sigma));
+	float k2 = exp(-4/(2*sigma*sigma));
+	float kd = exp(-2/(2*sigma*sigma));
+	float kD = exp(-8/(2*sigma*sigma));
+	float kh = exp(-5/(2*sigma*sigma));
+	float kn = k0 + 4*k1 + 4*k2 + 4*kd + 4*kD + 8*kh;
+	float k[5][5] = {
+		{kD, kh, k2, kh, kD},
+		{kh, kd, k1, kd, kh},
+		{k2, k1, k0, k1, k2},
+		{kh, kd, k1, kd, kh},
+		{kD, kh, k2, kh, kD},
+	};
+
+	// hand-made convolution
+	for (int j = 2; j < h - 2; j ++)
+	for (int i = 2; i < w - 2; i ++)
+	{
+		float ax = 0;
+		for (int dj = 0; dj < 5; dj++)
+		for (int di = 0; di < 5; di++)
+		{
+			int ii = i + di - 2;
+			int jj = j + dj - 2;
+			ax += k[dj][di] * in[ii+jj*w];
+		}
+		out[i+j*w] = ax / kn;
+	}
+}
 
 
 // process one (float rgb) frame
@@ -54,9 +96,12 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 	double framerate = seconds();
 
 	// convert image to gray (and put it into rafa's image structure)
+	float *gray0_A = xmalloc_float(w*h);
+	float *gray0_P = xmalloc_float(w*h);
 	float *gray_A = xmalloc_float(w*h);
 	float *gray_P = xmalloc_float(w*h);
 	float *gray_out = xmalloc_float(w*h);
+	float *color_out = xmalloc_float(3*w*h);
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
 	{
@@ -65,15 +110,17 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 			float r = in_A[3*idx+0];
 			float g = in_A[3*idx+1];
 			float b = in_A[3*idx+2];
-			gray_A[idx] = (r + g + b) / 3;
+			gray0_A[idx] = (r + g + b) / 3;
 		}
 		{
 			float r = in_P[3*idx+0];
 			float g = in_P[3*idx+1];
 			float b = in_P[3*idx+2];
-			gray_P[idx] = (r + g + b) / 3;
+			gray0_P[idx] = (r + g + b) / 3;
 		}
 	}
+	rich_man_gaussian_filter(gray_A, gray0_A, w, h, global_sigma);
+	rich_man_gaussian_filter(gray_P, gray0_P, w, h, global_sigma);
 
 	float alpha = 1;
 	float beta = 0;
@@ -125,7 +172,7 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 			gray_out[w*j+i] = r;
 		}
 		beta = 127;
-	} else if (global_mode == 6) { // gradient vector
+	} /*else if (global_mode == 6) { // gradient vector
 		global_name = "(Ax, Ay)";
 		for (int j = 1; j < h-1; j++)
 		for (int i = 1; i < w-1; i++)
@@ -155,13 +202,15 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 			gray_out[w*j+i] = r;
 		}
 		beta = 127;
-	} else if (global_mode == 8) { // temporal average
+	} */else if (global_mode == 6) { // temporal average
 		global_name = "(A + B)/2";
 		for (int i = 0; i < w*h; i++)
 			gray_out[i] = 0.5*(gray_A[i] + gray_P[i]);
 	}
 
 	// fill-in output gray values (for visualization)
+	if (global_mode != 0 && global_mode != 6)
+		alpha *= global_alpha_gain;
 	for (int j = 0; j < h; j++)
 	for (int i = 0; i < w; i++)
 	{
@@ -174,8 +223,12 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 		out[3*idx+2] = beta + alpha * gray_out[idx];
 	}
 
+	free(gray0_A);
+	free(gray0_P);
 	free(gray_A);
 	free(gray_P);
+	free(gray_out);
+	free(color_out);
 
 //	// draw HUD
 	char buf[1000];
@@ -187,6 +240,7 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 //			global_harris_flat_th,
 //			global_harris_neigh);
 	float fg[] = {0, 255, 0};//, red[] = {0, 0, 255};
+	float fg2[] = {100, 0, 150};
 	put_string_in_float_image(out,w,h,3, 5,5, fg, 0, &global_font, buf);
 //	snprintf(buf, 1000, "ransac ntrials = %d\nransac minliers = %d\n"
 //			"ransac maxerr = %g",
@@ -203,8 +257,12 @@ void process_frgb_frames(float *out, float *in_A, float *in_P, int w, int h)
 //	       	global_tracker_toggle?"tracker: ENABLED":"tracker: disabled");
 //
 	framerate = seconds() - framerate;
-	snprintf(buf, 1000, "%g Hz", 1/framerate);
-	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
+	snprintf(buf, 1000, "%g Hz\nalpha = %g\nsigma = %g",
+			1/framerate,
+			global_alpha_gain,
+			global_sigma
+			);
+	put_string_in_float_image(out,w,h,3, 355,5, fg2, 0, &global_font, buf);
 }
 
 #ifdef ENABLE_SCREENSHOTS
@@ -326,10 +384,15 @@ int main( int argc, char *argv[] )
 		/* exit if user press 'q' */
 		key = cvWaitKey( 1 ) % 0x10000;
 		double wheel_factor = 1.1;
-		if (key == 's') global_harris_sigma /= wheel_factor;
-		if (key == 'S') global_harris_sigma *= wheel_factor;
+		if (key == 's') global_sigma /= wheel_factor;
+		if (key == 'S') {
+			if (!global_sigma) global_sigma = 0.5;
+			else global_sigma *= wheel_factor;
+		}
 		if (key == 'k') global_harris_k /= pow(wheel_factor,1/32.0);
 		if (key == 'K') global_harris_k *= pow(wheel_factor,1/32.0);
+		if (key == 'a') global_alpha_gain /= wheel_factor;
+		if (key == 'A') global_alpha_gain *= wheel_factor;
 		if (key == 't') global_harris_flat_th /= wheel_factor;
 		if (key == 'T') global_harris_flat_th *= wheel_factor;
 		if (key == 'n' && global_harris_neigh > 0)
@@ -349,15 +412,23 @@ int main( int argc, char *argv[] )
 		if (key == 'w') global_harris_k *= -1;
 		if (key == 'p') global_pyramid = !global_pyramid;
 		if (key == 'z') global_tracker_toggle = !global_tracker_toggle;
-		if (key == 'm') global_mode = my_mod(global_mode + 1, 9);
-		if (key == 'M') global_mode = my_mod(global_mode - 1, 9);
-		if (isalpha(key)) {
-			printf("harris_sigma = %g\n", global_harris_sigma);
-			printf("harris_k = %g\n", global_harris_k);
-			printf("harris_t = %g\n", global_harris_flat_th);
-			printf("harris_n = %d\n", global_harris_neigh);
-			printf("\n");
+		if (key == ' ')   global_mode = my_mod(global_mode + 1, 7);
+		if (key == 'm')   global_mode = my_mod(global_mode + 1, 7);
+		if (key == 'M')   global_mode = my_mod(global_mode - 1, 7);
+		if (key == 65288) global_mode = my_mod(global_mode - 1, 7);
+		if (key == '1') {
+			global_alpha_gain = 1;
+			global_sigma = 0;
 		}
+		if (key == '0') global_sigma = 0;
+		if (key > 0) printf("key = %d\n", key);
+		//if (isalpha(key)) {
+		//	printf("harris_sigma = %g\n", global_harris_sigma);
+		//	printf("harris_k = %g\n", global_harris_k);
+		//	printf("harris_t = %g\n", global_harris_flat_th);
+		//	printf("harris_n = %d\n", global_harris_neigh);
+		//	printf("\n");
+		//}
 	}
 
 	/* free memory */
