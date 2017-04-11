@@ -19,6 +19,8 @@ void point_tracker_init(struct point_tracker *p, int nframes)
 }
 
 #include <stdlib.h>
+
+// API
 void point_tracker_add_frame(struct point_tracker *p, float *xyst, int n)
 {
 	//fprintf(stderr, "ADD FRAME %d (%d) %d\n", p->last_frame, p->nframes, n);
@@ -45,11 +47,12 @@ static int comes_from_the_past(struct point_tracker *p, int idx)
 	for (int i = 0; i < p->nframes; i++)
 	for (int j = 0; j < p->n[i]; j++)
 	if (i != p->last_frame)
-	if (dist(xyst, p->xyst[i][j]) < 2)
+	if (p->xyst[i][j][3] > 0 && dist(xyst, p->xyst[i][j]) < 3.5)
 		return true;
 	return false;
 }
 
+// API
 int point_tracker_extract_points(float *out_xyst, struct point_tracker *p,
 		float hysteresis_hi /*, float ... */ )
 {
@@ -62,6 +65,8 @@ int point_tracker_extract_points(float *out_xyst, struct point_tracker *p,
 			for (int k = 0; k < 4; k++)
 				out_xyst[4*n_out+k] = xyst[k];
 			n_out += 1;
+		} else {
+			xyst[3] = -INFINITY;
 		}
 	}
 	return n_out;

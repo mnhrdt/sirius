@@ -41,6 +41,7 @@ int    global_mauricio_Cth = 3000;
 double global_mauricio_Sth = 20.0;
 
 double global_tracker_toggle = 1;
+double global_histeresis_factor = 2;
 
 
 int find_straight_line_by_ransac(int *out_mask, float line[3],
@@ -92,7 +93,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 				gray, w, h,
 				global_harris_sigma,
 				global_harris_k,
-				global_harris_flat_th*0.3);
+				global_harris_flat_th);
 
 		// filter the points by the tracker
 		if (global_tracker_toggle) {
@@ -100,7 +101,7 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 					tmp_point,tmp_npoints);
 			npoints = point_tracker_extract_points(point,
 					global_tracker,
-					global_harris_flat_th);
+				global_harris_flat_th*global_histeresis_factor);
 		} else {
 			npoints = tmp_npoints;
 			for (int i = 0; i < 4*npoints; i++)
@@ -249,6 +250,8 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 
 	put_string_in_float_image(out,w,h,3, 355,31, fg, 0, &global_font,
 	       	global_tracker_toggle?"tracker: ENABLED":"tracker: disabled");
+	snprintf(buf, 1000, "\n\n\nh factor = %g", global_histeresis_factor);
+	put_string_in_float_image(out,w,h,3, 355,5, fg, 0, &global_font, buf);
 
 	framerate = seconds() - framerate;
 	snprintf(buf, 1000, "%g Hz", 1/framerate);
@@ -380,6 +383,8 @@ int main( int argc, char *argv[] )
 		if (key == 'w') global_harris_k *= -1;
 		if (key == 'p') global_pyramid = !global_pyramid;
 		if (key == 'z') global_tracker_toggle = !global_tracker_toggle;
+		if (key == 'x') global_histeresis_factor /= wheel_factor;
+		if (key == 'X') global_histeresis_factor *= wheel_factor;
 		if (isalpha(key)) {
 			printf("harris_sigma = %g\n", global_harris_sigma);
 			printf("harris_k = %g\n", global_harris_k);

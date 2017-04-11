@@ -8,8 +8,8 @@ OFLAGS="-Ofast -march=native -DNDEBUG"
 
 CFLAGS="$WFLAGS $OFLAGS"
 OCVFLAGS=`pkg-config opencv --cflags --libs`
-#$CC $CFLAGS camflow.c -o camflow $OCVFLAGS -lm
-$CC $CFLAGS demo_cdr.c -o demo_cdr $OCVFLAGS -lm
+$CC $CFLAGS camflow.c -o camflow $OCVFLAGS -lm
+#$CC $CFLAGS demo_cdr.c -o demo_cdr $OCVFLAGS -lm
 
 # only for the version with enabled screenshots
 #IIOFLAGS="-ltiff -lpng -ljpeg"
