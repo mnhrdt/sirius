@@ -1,4 +1,4 @@
-#define MAX_NFRAMES 10
+#define MAX_NFRAMES 100
 #define MAX_NPOINTS 1000
 struct point_tracker {
 	int last_frame;
@@ -47,13 +47,13 @@ static int comes_from_the_past(struct point_tracker *p, int idx)
 	for (int i = 0; i < p->nframes; i++)
 	for (int j = 0; j < p->n[i]; j++)
 	if (i != p->last_frame)
-	if (p->xyst[i][j][3] > 0 && dist(xyst, p->xyst[i][j]) < 3.5)
+	if (p->xyst[i][j][3] > 0 && dist(xyst, p->xyst[i][j]) < 8.5)
 		return true;
 	return false;
 }
 
 // API
-int point_tracker_extract_points(float *out_xyst, struct point_tracker *p,
+int point_tracker_extract_points_old(float *out_xyst, struct point_tracker *p,
 		float hysteresis_hi /*, float ... */ )
 {
 	int n_out = 0;
@@ -67,6 +67,58 @@ int point_tracker_extract_points(float *out_xyst, struct point_tracker *p,
 			n_out += 1;
 		} else {
 			xyst[3] = -INFINITY;
+		}
+	}
+	return n_out;
+}
+
+static int appears_later(struct point_tracker *p, int frame_idx, int point_idx)
+{
+	float *xyst = p->xyst[frame_idx][point_idx];
+	for (int j = (frame_idx + 1)%p->nframes; ; j = (j+1)%p->nframes)
+	{
+		for (int i = 0; i < p->n[j]; i++)
+		{
+			if (p->xyst[j][i][3]>0
+				       	&& dist(xyst,p->xyst[j][i])<8.5*xyst[2])
+				return true;
+		}
+		if (j == p->last_frame)
+			break;
+	}
+	return false;
+}
+
+
+int point_tracker_extract_points(float *out_xyst, struct point_tracker *p,
+		float hysteresis_hi /*, float ... */ )
+{
+	int n_out = 0;
+	for (int i = 0; i < p->n[p->last_frame]; i++)
+	{
+		float *xyst = p->xyst[p->last_frame][i];
+		if (xyst[3] > hysteresis_hi)
+		{
+			for (int k = 0; k < 4; k++)
+				out_xyst[4*n_out+k] = xyst[k];
+			n_out += 1;
+		} else {
+			xyst[3] = -INFINITY;
+		}
+	}
+	for (int j = 0; j < p->nframes; j++)
+	{
+		if (j == p->last_frame)
+			continue;
+		for (int i = 0; i < p->n[j]; i++)
+		{
+			if (!appears_later(p, j, i))
+			{
+				float *xyst = p->xyst[j][i];
+				for (int k = 0; k < 4; k++)
+					out_xyst[4*n_out+k] = xyst[k];
+				n_out += 1;
+			}
 		}
 	}
 	return n_out;

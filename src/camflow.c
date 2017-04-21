@@ -281,7 +281,7 @@ int main( int argc, char *argv[] )
 	int cam_id = atoi(argv[1]);
 
 	global_font = uncompress_font(*xfont_8x13); // prepare font for HUD
-	point_tracker_init(global_tracker, 2);
+	point_tracker_init(global_tracker, 10);
 
 	// interactivity state
 	CvCapture *capture = 0;
