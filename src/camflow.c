@@ -97,11 +97,11 @@ static void process_frgb_frame(float *out, float *in, int w, int h)
 
 		// filter the points by the tracker
 		if (global_tracker_toggle) {
-			point_tracker_add_frame(global_tracker,
-					tmp_point,tmp_npoints);
+			float h_hi = global_harris_flat_th * global_histeresis_factor;
+			point_tracker_add_frame_t(global_tracker,
+					tmp_point,tmp_npoints, h_hi);
 			npoints = point_tracker_extract_points(point,
-					global_tracker,
-				global_harris_flat_th*global_histeresis_factor);
+					global_tracker);
 		} else {
 			npoints = tmp_npoints;
 			for (int i = 0; i < 4*npoints; i++)
@@ -281,7 +281,7 @@ int main( int argc, char *argv[] )
 	int cam_id = atoi(argv[1]);
 
 	global_font = uncompress_font(*xfont_8x13); // prepare font for HUD
-	point_tracker_init(global_tracker, 10);
+	point_tracker_init(global_tracker, 20);
 
 	// interactivity state
 	CvCapture *capture = 0;
