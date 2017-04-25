@@ -357,6 +357,7 @@ int main( int argc, char *argv[] )
 
 		cvShowImage( "result", frame_small );
 
+
 		/* exit if user press 'q' */
 		key = cvWaitKey( 1 ) % 0x10000;
 		double wheel_factor = 1.1;
