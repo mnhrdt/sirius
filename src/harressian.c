@@ -1,5 +1,8 @@
 // implementation of the "harris hessian" keypoint detector
 
+#include <assert.h>
+#include <math.h>
+#include <string.h>
 #include "xmalloc.c"
 
 // ~ 9*w*h multiplications
