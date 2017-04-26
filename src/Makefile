@@ -3,7 +3,7 @@ CFLAGS ?= -march=native -O3
 OCVFLAGS = `pkg-config opencv --cflags --libs`
 IIOFLAGS = -ltiff -lpng -ljpeg
 
-BIN = camflow harrpoints
+BIN = camflow harrpoints viewpoints
 
 default: $(BIN)
 
@@ -12,6 +12,9 @@ camflow: camflow.c harressian.c tracker.c
 
 harrpoints: harrpoints.c harressian.c tracker.c iio.c
 	$(CC) $(CFLAGS) -o $@ harrpoints.c iio.c $(IIOFLAGS) -lm
+
+viewpoints: viewpoints.c iio.c
+	$(CC) $(CFLAGS) -o $@ viewpoints.c iio.c $(IIOFLAGS) -lm
 
 .PHONY:
 clean:

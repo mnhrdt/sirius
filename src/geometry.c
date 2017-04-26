@@ -77,32 +77,6 @@ static bool cut_line_with_rectangle(double out_a[2], double out_b[2],
 	return false;
 }
 
-static int insideP(int w, int h, int i, int j)
-{
-	return i >= 0 && j >= 0 && i < w && j < h;
-}
-
-// generic function to traverse a segment between two pixels
-void traverse_segment(int px, int py, int qx, int qy,
-		void (*f)(int,int,void*), void *e)
-{
-	if (px == qx && py == qy)
-		f(px, py, e);
-	else if (qx + qy < px + py) // bad quadrants
-		traverse_segment(qx, qy, px, py, f, e);
-	else {
-		if (qx - px > qy - py || px - qx > qy - py) { // horizontal
-			float slope = (qy - py)/(float)(qx - px);
-			for (int i = 0; i < qx-px; i++)
-				f(i+px, lrint(py + i*slope), e);
-		} else { // vertical
-			float slope = (qx - px)/(float)(qy - py);
-			for (int j = 0; j <= qy-py; j++)
-				f(lrint(px + j*slope), j+py, e);
-		}
-	}
-}
-
 // instance of "ransac_error_evaluation_function"
 float distance_of_point_to_straight_line(float *line, float *point, void *usr)
 {
