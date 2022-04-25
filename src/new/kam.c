@@ -25,22 +25,21 @@ static void kam_exposer(struct FTR *f, int b, int m, int unused_x, int unused_y)
 	}
 
 	struct camera_t *c = e->c;
-	struct timeval timeout;
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
-	camera_frame(c, timeout);
+	camera_capture(c);
 
 	uint8_t *rgb = yuyv2rgb(c->head.start, c->width, c->height);
+	//fillrgb(f->rgb
 
 	int ox = (f->w - c->width) / 2;
 	int oy = (f->h - c->height) / 2;
 	assert(ox >= 0);
 	assert(oy >= 0);
-	for (int j = 0; j < c->height; j++)
-	for (int i = 0; i < c->width; i++)
+	for (int j = 0; j < (int)c->height; j++)
+	for (int i = 0; i < (int)c->width; i++)
 	for (int k = 0; k < 3; k++)
 		f->rgb[3*(f->w*(j+oy)+(i+ox))+k] = rgb[3*(j*c->width+i)+k];
-	free(rgb);
+		//f->rgb[3*(f->w*(j+oy)+(i+ox))+k] = rgb[3*(j*c->width+(c->width -i-1))+k];
+	//free(rgb);
 	f->changed = 1;
 }
 
@@ -63,7 +62,7 @@ int main()
 	struct kam_state e[1];
 
 	// camera stuff
-	e->c = camera_open("/dev/video0", 800, 600); // XXX: depend on cam!
+	e->c = camera_open("/dev/video0", 800, 448); // XXX: depends on cam!
 	camera_init(e->c);
 	camera_start(e->c);
 

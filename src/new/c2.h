@@ -45,3 +45,4 @@ int camera_capture(struct camera_t* c);
 int camera_frame(struct camera_t* c, struct timeval timeout);
 
 uint8_t* yuyv2rgb(uint8_t* yuyv, uint32_t width, uint32_t height);
+void fillrgb(uint8_t *rgb, uint8_t *yuyv, uint32_t width, uint32_t height);

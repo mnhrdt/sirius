@@ -257,13 +257,36 @@ uint8_t* yuyv2rgb(uint8_t* yuyv, uint32_t width, uint32_t height)
 		int v  = yuyv[ij * 2 + 3] - 128;
 		rgb[3*ij + 0 + 0] = bclamp((y0 + 359*v) >> 8);
 		rgb[3*ij + 0 + 3] = bclamp((y1 + 359*v) >> 8);
-		rgb[3*ij + 1 + 0] = bclamp((y0 + 88*v - 183*u) >> 8);
-		rgb[3*ij + 1 + 3] = bclamp((y1 + 88*v - 183*u) >> 8);
+		rgb[3*ij + 1 + 0] = bclamp((y0 + 88*u - 183*v) >> 8);
+		rgb[3*ij + 1 + 3] = bclamp((y1 + 88*u - 183*v) >> 8);
 		rgb[3*ij + 2 + 0] = bclamp((y0 + 454*u) >> 8);
 		rgb[3*ij + 2 + 3] = bclamp((y1 + 454*u) >> 8);
 	}
 	return rgb;
 }
+
+//void fillrgb(
+//		uint8_t *rgb,  // rgb  888
+//		uint8_t *yuyv,   // yuyv 422
+//		int w, int h
+//	    )
+//{
+//	for (size_t i = 0; i < h; i += 1)
+//	for (size_t j = 0; j < w; j += 2)
+//	{
+//		size_t ij = i * w + j;
+//		int y0 = yuyv[ij * 2 + 0] << 8;
+//		int u  = yuyv[ij * 2 + 1] - 128;
+//		int y1 = yuyv[ij * 2 + 2] << 8;
+//		int v  = yuyv[ij * 2 + 3] - 128;
+//		rgb[3*ij + 0 + 0] = bclamp((y0 + 359*v) >> 8);
+//		rgb[3*ij + 0 + 3] = bclamp((y1 + 359*v) >> 8);
+//		rgb[3*ij + 1 + 0] = bclamp((y0 + 88*v - 183*u) >> 8);
+//		rgb[3*ij + 1 + 3] = bclamp((y1 + 88*v - 183*u) >> 8);
+//		rgb[3*ij + 2 + 0] = bclamp((y0 + 454*u) >> 8);
+//		rgb[3*ij + 2 + 3] = bclamp((y1 + 454*u) >> 8);
+//	}
+//}
 
 //static uint8_t* rgb2rgb(uint8_t* x, uint32_t width, uint32_t height)
 //{
