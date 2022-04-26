@@ -296,7 +296,7 @@ uint8_t* yuyv2rgb(uint8_t* yuyv, uint32_t width, uint32_t height)
 //	return rgb;
 //}
 
-#ifndef HIDE_MAIN
+#ifndef WEBCAM_HIDE_MAIN
 #define CAPTURE_MAIN
 #endif
 

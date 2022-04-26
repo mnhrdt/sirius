@@ -39,7 +39,7 @@ static void kam_exposer(struct FTR *f, int b, int m, int unused_x, int unused_y)
 	for (int k = 0; k < 3; k++)
 		f->rgb[3*(f->w*(j+oy)+(i+ox))+k] = rgb[3*(j*c->width+i)+k];
 		//f->rgb[3*(f->w*(j+oy)+(i+ox))+k] = rgb[3*(j*c->width+(c->width -i-1))+k];
-	//free(rgb);
+	free(rgb);
 	f->changed = 1;
 }
 
@@ -62,13 +62,16 @@ int main()
 	struct kam_state e[1];
 
 	// camera stuff
-	e->c = camera_open("/dev/video0", 800, 448); // XXX: depends on cam!
+	int w = 800;
+	int h = 600;
+	e->c = camera_open("/dev/video0", w, h); // XXX: depends on cam!
+	//e->c = camera_open("/dev/video0", 800, 448); // XXX: depends on cam!
 	camera_init(e->c);
 	camera_start(e->c);
 
 
 	// window stuff
-	struct FTR f = ftr_new_window(900,700);
+	struct FTR f = ftr_new_window(w+100,h+100);
 	f.userdata = e;
 	f.changed = 1;
 	ftr_set_handler(&f, "key"   , kam_key_handler);
